@@ -1,0 +1,6 @@
+/target
+*.db
+*.db-shm
+*.db-wal
+monolith_cache_data.json
+.env
