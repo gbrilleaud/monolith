@@ -4,6 +4,7 @@ pub mod backend_client;
 pub mod backend_config;
 pub mod cache;
 pub mod client_auth;
+pub mod cover;
 pub mod db;
 pub mod models;
 pub mod navigation;

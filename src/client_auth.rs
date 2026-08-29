@@ -1,6 +1,7 @@
 use crate::{
     auth::AuthMode,
     backend_client::BackendClient,
+    models::UserOverride,
     session_store::{ClientSession, SessionStore},
 };
 use anyhow::{bail, Context, Result};
@@ -20,6 +21,7 @@ pub enum AuthState {
 }
 
 type AuthResult = std::result::Result<ClientSession, String>;
+pub type OverrideSyncResult = std::result::Result<(), String>;
 
 pub struct ClientAuth {
     backend_url: String,
@@ -27,6 +29,7 @@ pub struct ClientAuth {
     cache_path: PathBuf,
     state: AuthState,
     receiver: Option<Receiver<AuthResult>>,
+    override_receiver: Option<Receiver<OverrideSyncResult>>,
     policy_receiver: Option<Receiver<std::result::Result<AuthMode, String>>>,
     auth_mode: Option<AuthMode>,
     policy_error: Option<String>,
@@ -49,6 +52,7 @@ impl ClientAuth {
             cache_path,
             state,
             receiver: None,
+            override_receiver: None,
             policy_receiver: None,
             auth_mode: None,
             policy_error: None,
@@ -163,8 +167,66 @@ impl ClientAuth {
     pub fn logout(&mut self) -> Result<()> {
         self.store.clear()?;
         self.receiver = None;
+        self.override_receiver = None;
         self.state = AuthState::SignedOut;
         Ok(())
+    }
+
+    pub fn begin_override_sync(&mut self, value: UserOverride) -> Result<()> {
+        if self.override_receiver.is_some() {
+            bail!("publication d’une surcharge déjà en cours");
+        }
+        let AuthState::Authenticated(session) = &self.state else {
+            bail!("publication distante impossible hors connexion");
+        };
+        if !session.role.can_write() {
+            bail!("compte en lecture seule");
+        }
+        if value.user_id != session.user_id {
+            bail!("la surcharge ne correspond pas à la session active");
+        }
+
+        let backend_url = session.backend_url.clone();
+        let token = session.access_token.clone();
+        let cache_path = self.cache_path.clone();
+        let (sender, receiver) = mpsc::channel();
+        thread::spawn(move || {
+            let result = (|| -> Result<()> {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .context("initialisation réseau")?;
+                runtime.block_on(async move {
+                    let client = BackendClient::new(backend_url)?;
+                    client.save_override(&token, &value).await?;
+                    client.refresh_offline_cache(&token, &cache_path).await?;
+                    Ok(())
+                })
+            })()
+            .map_err(|error| format!("{error:#}"));
+            let _ = sender.send(result);
+        });
+        self.override_receiver = Some(receiver);
+        Ok(())
+    }
+
+    pub fn override_sync_in_progress(&self) -> bool {
+        self.override_receiver.is_some()
+    }
+
+    pub fn poll_override_sync(&mut self) -> Option<OverrideSyncResult> {
+        let receiver = self.override_receiver.as_ref()?;
+        match receiver.try_recv() {
+            Ok(result) => {
+                self.override_receiver = None;
+                Some(result)
+            }
+            Err(TryRecvError::Disconnected) => {
+                self.override_receiver = None;
+                Some(Err("publication distante interrompue".into()))
+            }
+            Err(TryRecvError::Empty) => None,
+        }
     }
 
     pub fn continue_offline(&mut self, user_id: i64) {

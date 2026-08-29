@@ -1,11 +1,16 @@
 use crate::auth::AuthMode;
 use crate::client_auth::{AuthState, ClientAuth};
+use crate::cover::cover_uri;
 use crate::db::Database;
 use crate::models::UserOverride;
 use crate::navigation::{AppView, Navigator};
 use crate::sync::SyncEngine;
 use eframe::egui;
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    sync::mpsc::{self, Receiver, TryRecvError},
+    thread,
+};
 
 pub struct MonolithApp {
     db: Database,
@@ -15,6 +20,7 @@ pub struct MonolithApp {
     edit_game_id: Option<i64>,
     edit_description: String,
     edit_cover: String,
+    cover_picker: Option<Receiver<Option<PathBuf>>>,
     notice: Option<String>,
     cache_path: PathBuf,
     username: String,
@@ -33,6 +39,7 @@ impl MonolithApp {
             edit_game_id: None,
             edit_description: String::new(),
             edit_cover: String::new(),
+            cover_picker: None,
             notice: None,
             cache_path,
             username: String::new(),
@@ -63,24 +70,84 @@ impl MonolithApp {
             description: non_empty(&self.edit_description),
             cover_art: non_empty(&self.edit_cover),
         };
-        self.notice = Some(
-            match self.db.save_override(&override_value).and_then(|_| {
-                SyncEngine::new(&self.db, user_id, &self.cache_path)
-                    .refresh_local_cache()
-                    .map(|_| ())
-                    .map_err(|error| rusqlite::Error::ToSqlConversionFailure(error.into()))
-            }) {
-                Ok(()) => "Surcharge sauvegardée et cache actualisé".into(),
-                Err(error) => format!("Échec de sauvegarde : {error}"),
-            },
-        );
-        self.edit_game_id = None;
+        let local_result = self.db.save_override(&override_value).and_then(|_| {
+            SyncEngine::new(&self.db, user_id, &self.cache_path)
+                .refresh_local_cache()
+                .map(|_| ())
+                .map_err(|error| rusqlite::Error::ToSqlConversionFailure(error.into()))
+        });
+
+        match local_result {
+            Err(error) => {
+                self.notice = Some(format!("Échec de sauvegarde locale : {error}"));
+            }
+            Ok(()) => {
+                self.edit_game_id = None;
+                if matches!(self.auth.state(), AuthState::Authenticated(_)) {
+                    self.notice = Some(match self.auth.begin_override_sync(override_value) {
+                        Ok(()) => {
+                            "Surcharge sauvegardée localement · publication distante en cours"
+                                .into()
+                        }
+                        Err(error) => format!(
+                            "Surcharge conservée localement · publication non lancée : {error}"
+                        ),
+                    });
+                } else {
+                    self.notice = Some("Surcharge sauvegardée dans le cache hors ligne".into());
+                }
+            }
+        }
+    }
+
+    fn begin_cover_picker(&mut self) {
+        if self.cover_picker.is_some() {
+            return;
+        }
+        let (sender, receiver) = mpsc::channel();
+        thread::spawn(move || {
+            let selection = rfd::FileDialog::new()
+                .set_title("Choisir une jaquette")
+                .add_filter("Images", &["png", "jpg", "jpeg", "webp"])
+                .pick_file();
+            let _ = sender.send(selection);
+        });
+        self.cover_picker = Some(receiver);
+    }
+
+    fn poll_cover_picker(&mut self) {
+        let Some(receiver) = &self.cover_picker else {
+            return;
+        };
+        match receiver.try_recv() {
+            Ok(Some(path)) => {
+                self.edit_cover = path.display().to_string();
+                self.notice =
+                    Some("Jaquette sélectionnée ; vérifiez l’aperçu puis sauvegardez".into());
+                self.cover_picker = None;
+            }
+            Ok(None) => self.cover_picker = None,
+            Err(TryRecvError::Disconnected) => {
+                self.notice = Some("Le sélecteur de jaquette s’est interrompu".into());
+                self.cover_picker = None;
+            }
+            Err(TryRecvError::Empty) => {}
+        }
     }
 }
 
 impl eframe::App for MonolithApp {
     fn update(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll_cover_picker();
         self.auth.poll();
+        if let Some(result) = self.auth.poll_override_sync() {
+            self.notice = Some(match result {
+                Ok(()) => "Surcharge publiée sur le backend et cache synchronisé".into(),
+                Err(error) => format!(
+                    "Publication distante échouée ; la version locale est conservée : {error}"
+                ),
+            });
+        }
         if matches!(self.auth.state(), AuthState::Authenticating) || self.auth.auth_mode().is_none()
         {
             context.request_repaint_after(std::time::Duration::from_millis(100));
@@ -88,6 +155,9 @@ impl eframe::App for MonolithApp {
         if matches!(self.auth.state(), AuthState::Authenticated(_)) {
             self.password.clear();
             self.bearer_token.clear();
+        }
+        if self.cover_picker.is_some() || self.auth.override_sync_in_progress() {
+            context.request_repaint_after(std::time::Duration::from_millis(100));
         }
 
         if self.active_user_id().is_none() {
@@ -115,6 +185,10 @@ impl eframe::App for MonolithApp {
                         logout = ui.button("Quitter le mode hors ligne").clicked();
                     }
                     _ => {}
+                }
+                if self.auth.override_sync_in_progress() {
+                    ui.spinner();
+                    ui.label("Publication…");
                 }
                 if let Some(notice) = &self.notice {
                     ui.colored_label(egui::Color32::LIGHT_GREEN, notice);
@@ -303,12 +377,21 @@ impl MonolithApp {
                             game.system_id == system_id
                                 && game.title.to_lowercase().contains(&needle)
                         }) {
-                            let cover = game.cover_art.as_deref().unwrap_or("jaquette absente");
-                            let label = format!("{}\n{}", game.title, cover);
-                            if ui
-                                .add_sized([180.0, 120.0], egui::Button::new(label))
-                                .clicked()
-                            {
+                            let mut open = false;
+                            ui.group(|ui| {
+                                ui.set_width(180.0);
+                                if let Some(response) = render_cover(
+                                    ui,
+                                    game.cover_art.as_deref(),
+                                    egui::vec2(168.0, 126.0),
+                                ) {
+                                    open |= response.interact(egui::Sense::click()).clicked();
+                                }
+                                open |= ui
+                                    .add_sized([168.0, 38.0], egui::Button::new(&game.title))
+                                    .clicked();
+                            });
+                            if open {
                                 self.nav.open_details(game.game_id);
                             }
                         }
@@ -330,11 +413,9 @@ impl MonolithApp {
                 ui.heading(&game.title);
                 ui.label(format!("{} · langue {}", game.system_name, game.language));
                 ui.separator();
+                render_cover(ui, game.cover_art.as_deref(), egui::vec2(240.0, 320.0));
+                ui.add_space(8.0);
                 ui.label(&game.description);
-                ui.label(format!(
-                    "Jaquette : {}",
-                    game.cover_art.as_deref().unwrap_or("absente")
-                ));
                 ui.add_space(16.0);
                 if ui
                     .add_enabled(
@@ -355,7 +436,34 @@ impl MonolithApp {
                     ui.label("Chemin ou URL de la jaquette");
                     ui.text_edit_singleline(&mut self.edit_cover);
                     ui.horizontal(|ui| {
-                        if ui.button("Sauvegarder").clicked() {
+                        if ui
+                            .add_enabled(
+                                self.cover_picker.is_none(),
+                                egui::Button::new("Parcourir…"),
+                            )
+                            .clicked()
+                        {
+                            self.begin_cover_picker();
+                        }
+                        if self.cover_picker.is_some() {
+                            ui.spinner();
+                            ui.label("Sélecteur ouvert…");
+                        }
+                    });
+                    ui.label("Aperçu");
+                    render_cover(
+                        ui,
+                        non_empty(&self.edit_cover).as_deref(),
+                        egui::vec2(180.0, 240.0),
+                    );
+                    ui.horizontal(|ui| {
+                        if ui
+                            .add_enabled(
+                                !self.auth.override_sync_in_progress(),
+                                egui::Button::new("Sauvegarder"),
+                            )
+                            .clicked()
+                        {
                             self.save_edit(game_id);
                         }
                         if ui.button("Annuler").clicked() {
@@ -377,4 +485,29 @@ impl MonolithApp {
 fn non_empty(value: &str) -> Option<String> {
     let trimmed = value.trim();
     (!trimmed.is_empty()).then(|| trimmed.to_owned())
+}
+
+fn render_cover(
+    ui: &mut egui::Ui,
+    reference: Option<&str>,
+    size: egui::Vec2,
+) -> Option<egui::Response> {
+    let Some(reference) = reference else {
+        ui.label("Jaquette absente");
+        return None;
+    };
+    match cover_uri(reference) {
+        Ok(Some(uri)) => Some(ui.add(egui::Image::new(uri).fit_to_exact_size(size))),
+        Ok(None) => {
+            ui.label("Jaquette absente");
+            None
+        }
+        Err(error) => {
+            ui.colored_label(
+                egui::Color32::LIGHT_RED,
+                format!("Jaquette invalide : {error}"),
+            );
+            None
+        }
+    }
 }

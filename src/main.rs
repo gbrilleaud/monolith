@@ -34,6 +34,9 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "Monolith",
         options,
-        Box::new(move |_cc| Ok(Box::new(MonolithApp::new(database, auth, cache_path)))),
+        Box::new(move |creation_context| {
+            egui_extras::install_image_loaders(&creation_context.egui_ctx);
+            Ok(Box::new(MonolithApp::new(database, auth, cache_path)))
+        }),
     )
 }

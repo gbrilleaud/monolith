@@ -1,9 +1,11 @@
 use monolith::{
     auth::Role,
     backend::{router, BackendState},
+    backend_client::BackendClient,
     backend_config::BackendConfig,
     client_auth::{AuthState, ClientAuth},
     db::Database,
+    models::{GameMetadata, UserOverride},
     session_store::{ClientSession, SessionStore},
 };
 use std::time::Duration;
@@ -179,4 +181,79 @@ async fn bearer_login_resolves_identity_and_persists_session() {
     };
     assert_eq!(session.username, "bearer-user");
     assert_eq!(session.role, Role::ReadOnly);
+}
+
+#[tokio::test]
+async fn authenticated_override_sync_runs_in_background_and_refreshes_cache() {
+    let directory = tempdir().unwrap();
+    let database_path = directory.path().join("backend.db");
+    let database = Database::open(&database_path).unwrap();
+    let user_id = database
+        .create_local_user("alice", "safe-password", Role::Standard)
+        .unwrap();
+    database
+        .upsert_game(&GameMetadata {
+            game_id: 42,
+            system_id: 10,
+            system_name: "Dreamcast".into(),
+            title: "Sonic Adventure".into(),
+            description: "Récoltée".into(),
+            cover_art: None,
+            language: "fr".into(),
+        })
+        .unwrap();
+    let config = BackendConfig {
+        database_path: database_path.display().to_string(),
+        ..BackendConfig::default()
+    };
+    let state = BackendState::new(config, directory.path()).unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, router(state)).await.unwrap() });
+    let backend_url = format!("http://{address}");
+    let client = BackendClient::new(&backend_url).unwrap();
+    let login = client.login_local("alice", "safe-password").await.unwrap();
+    let cache_path = directory.path().join("cache.json");
+    let store = SessionStore::new(directory.path().join("session.json"));
+    store
+        .save(&ClientSession {
+            backend_url: backend_url.clone(),
+            access_token: login.access_token,
+            user_id,
+            username: "alice".into(),
+            role: Role::Standard,
+            expires_at: login.expires_at,
+        })
+        .unwrap();
+    let mut auth = ClientAuth::new(
+        backend_url,
+        store,
+        cache_path.clone(),
+        chrono::Utc::now().timestamp(),
+    )
+    .unwrap();
+
+    auth.begin_override_sync(UserOverride {
+        user_id,
+        game_id: 42,
+        description: Some("Description distante".into()),
+        cover_art: Some("https://media.example/sonic.webp".into()),
+    })
+    .unwrap();
+    assert!(auth.override_sync_in_progress());
+
+    let result = loop {
+        if let Some(result) = auth.poll_override_sync() {
+            break result;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    };
+    result.unwrap();
+
+    let snapshot = monolith::cache::load_cache(&cache_path).unwrap();
+    assert_eq!(snapshot.games[0].description, "Description distante");
+    assert_eq!(
+        snapshot.games[0].cover_art.as_deref(),
+        Some("https://media.example/sonic.webp")
+    );
 }
