@@ -62,7 +62,7 @@ Une configuration différente peut être choisie avec `--config /chemin/backend.
 - `GET /api/v1/catalog` : catalogue résolu du profil authentifié ;
 - `PUT /api/v1/users/{user_id}/overrides/{game_id}` : surcharge utilisateur.
 
-Toutes les routes, sauf la santé et le login local, attendent `Authorization: Bearer <jeton>`.
+Toutes les routes, sauf la santé et le login local, attendent l’en-tête `Authorization: Bearer [JETON]`.
 
 ## Sécurité actuelle
 
