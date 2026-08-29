@@ -1,5 +1,5 @@
 use crate::{
-    backend::{LoginRequest, LoginResponse},
+    backend::{HealthResponse, IdentityResponse, LoginRequest, LoginResponse},
     cache::write_cache_atomic,
     models::{CacheSnapshot, UserOverride},
 };
@@ -22,6 +22,18 @@ impl BackendClient {
             base_url,
             http: reqwest::Client::new(),
         })
+    }
+
+    pub async fn health(&self) -> Result<HealthResponse> {
+        self.http
+            .get(format!("{}/api/v1/health", self.base_url))
+            .send()
+            .await
+            .context("backend inaccessible")?
+            .error_for_status()?
+            .json()
+            .await
+            .context("politique d’authentification invalide")
     }
 
     pub async fn login_local(&self, username: &str, password: &str) -> Result<LoginResponse> {
@@ -53,6 +65,20 @@ impl BackendClient {
             .json()
             .await
             .context("catalogue invalide")
+    }
+
+    pub async fn identity(&self, bearer_token: &str) -> Result<IdentityResponse> {
+        self.http
+            .get(format!("{}/api/v1/auth/me", self.base_url))
+            .bearer_auth(bearer_token)
+            .send()
+            .await
+            .context("backend inaccessible")?
+            .error_for_status()
+            .context("session refusée")?
+            .json()
+            .await
+            .context("identité invalide")
     }
 
     pub async fn refresh_offline_cache(

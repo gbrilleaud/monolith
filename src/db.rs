@@ -210,28 +210,30 @@ impl Database {
             role,
             source: AuthSource::Local,
             token,
+            expires_at: Some(expires_at),
         }))
     }
 
     pub fn resolve_local_session(&self, token: &str) -> AnyResult<Option<AuthPrincipal>> {
-        let record: Option<(i64, String, String)> = self
+        let record: Option<(i64, String, String, i64)> = self
             .conn
             .query_row(
-                "SELECT u.user_id, u.username, u.role FROM sessions s
+                "SELECT u.user_id, u.username, u.role, s.expires_at FROM sessions s
                  JOIN users u ON u.user_id=s.user_id
                  WHERE s.token_hash=?1 AND s.expires_at>?2 AND u.enabled=1",
                 params![token_fingerprint(token), Utc::now().timestamp()],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
             )
             .optional()?;
         record
-            .map(|(user_id, username, role)| {
+            .map(|(user_id, username, role, expires_at)| {
                 Ok(AuthPrincipal {
                     user_id,
                     username,
                     role: Role::parse(&role).ok_or_else(|| anyhow!("rôle invalide en base"))?,
                     source: AuthSource::Local,
                     token: token.into(),
+                    expires_at: Some(expires_at),
                 })
             })
             .transpose()
@@ -290,6 +292,7 @@ impl Database {
             role: Role::parse(&record.2).ok_or_else(|| anyhow!("rôle invalide en base"))?,
             source: AuthSource::Sso,
             token: String::new(),
+            expires_at: None,
         }))
     }
 

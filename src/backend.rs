@@ -49,6 +49,7 @@ pub fn router(state: BackendState) -> Router {
     Router::new()
         .route("/api/v1/health", get(health))
         .route("/api/v1/auth/login", post(local_login))
+        .route("/api/v1/auth/me", get(identity))
         .route("/api/v1/catalog", get(catalog))
         .route(
             "/api/v1/users/:user_id/overrides/:game_id",
@@ -57,8 +58,17 @@ pub fn router(state: BackendState) -> Router {
         .with_state(state)
 }
 
-async fn health(State(state): State<BackendState>) -> Json<serde_json::Value> {
-    Json(json!({ "status": "ok", "auth_mode": state.config.auth.mode }))
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HealthResponse {
+    pub status: String,
+    pub auth_mode: AuthMode,
+}
+
+async fn health(State(state): State<BackendState>) -> Json<HealthResponse> {
+    Json(HealthResponse {
+        status: "ok".into(),
+        auth_mode: state.config.auth.mode,
+    })
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -74,6 +84,16 @@ pub struct LoginResponse {
     pub user_id: i64,
     pub username: String,
     pub role: Role,
+    pub expires_at: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct IdentityResponse {
+    pub user_id: i64,
+    pub username: String,
+    pub role: Role,
+    pub source: AuthSource,
+    pub expires_at: Option<i64>,
 }
 
 async fn local_login(
@@ -98,6 +118,23 @@ async fn local_login(
         user_id: principal.user_id,
         username: principal.username,
         role: principal.role,
+        expires_at: principal
+            .expires_at
+            .expect("une session locale doit expirer"),
+    }))
+}
+
+async fn identity(
+    State(state): State<BackendState>,
+    headers: HeaderMap,
+) -> Result<Json<IdentityResponse>, ApiError> {
+    let principal = authenticate(&state, &headers).await?;
+    Ok(Json(IdentityResponse {
+        user_id: principal.user_id,
+        username: principal.username,
+        role: principal.role,
+        source: principal.source,
+        expires_at: principal.expires_at,
     }))
 }
 
@@ -158,7 +195,7 @@ async fn authenticate(
         let identity = verify_oidc_jwt(token, &state.config.auth.oidc)
             .await
             .map_err(|_| ApiError::new(StatusCode::UNAUTHORIZED, "invalid_sso_token"))?;
-        return state
+        let mut principal = state
             .database()?
             .upsert_sso_user(
                 &identity.subject,
@@ -167,7 +204,10 @@ async fn authenticate(
                 state.config.auth.oidc.auto_provision,
             )
             .map_err(ApiError::internal)?
-            .ok_or_else(|| ApiError::new(StatusCode::FORBIDDEN, "sso_user_not_provisioned"));
+            .ok_or_else(|| ApiError::new(StatusCode::FORBIDDEN, "sso_user_not_provisioned"))?;
+        principal.token = token.into();
+        principal.expires_at = Some(identity.expires_at);
+        return Ok(principal);
     }
     Err(ApiError::new(StatusCode::UNAUTHORIZED, "invalid_token"))
 }

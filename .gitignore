@@ -3,5 +3,6 @@
 *.db-shm
 *.db-wal
 monolith_cache_data.json
+session.json
 .env
 /config/backend.toml

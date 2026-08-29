@@ -58,6 +58,7 @@ Une configuration différente peut être choisie avec `--config /chemin/backend.
 
 - `GET /api/v1/health` : santé et mode d'authentification ;
 - `POST /api/v1/auth/login` : session locale ;
+- `GET /api/v1/auth/me` : identité, rôle et expiration du Bearer ;
 - `GET /api/v1/catalog` : catalogue résolu du profil authentifié ;
 - `PUT /api/v1/users/{user_id}/overrides/{game_id}` : surcharge utilisateur.
 

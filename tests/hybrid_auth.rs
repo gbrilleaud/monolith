@@ -91,6 +91,7 @@ fn hybrid_policy_accepts_local_and_sso_principals() {
         role: Role::ReadOnly,
         source: AuthSource::Sso,
         token: String::new(),
+        expires_at: None,
     };
     assert_eq!(principal.role, Role::ReadOnly);
 }

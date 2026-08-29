@@ -75,6 +75,7 @@ pub struct AuthPrincipal {
     pub source: AuthSource,
     #[serde(skip_serializing)]
     pub token: String,
+    pub expires_at: Option<i64>,
 }
 
 pub fn hash_password(password: &str) -> Result<String> {
@@ -106,6 +107,7 @@ pub fn token_fingerprint(token: &str) -> String {
 #[derive(Debug, Deserialize)]
 struct OidcClaims {
     sub: String,
+    exp: i64,
     #[serde(default)]
     preferred_username: Option<String>,
     #[serde(default)]
@@ -117,6 +119,7 @@ pub struct VerifiedOidcIdentity {
     pub subject: String,
     pub username: String,
     pub role: Role,
+    pub expires_at: i64,
 }
 
 pub async fn verify_oidc_jwt(token: &str, config: &OidcConfig) -> Result<VerifiedOidcIdentity> {
@@ -150,5 +153,6 @@ pub async fn verify_oidc_jwt(token: &str, config: &OidcConfig) -> Result<Verifie
         subject: claims.sub,
         username,
         role,
+        expires_at: claims.exp,
     })
 }

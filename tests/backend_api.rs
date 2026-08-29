@@ -43,6 +43,19 @@ async fn test_server(role: Role) -> (BackendClient, tempfile::TempDir) {
 }
 
 #[tokio::test]
+async fn login_exposes_expiration_and_bearer_identity() {
+    let (client, _directory) = test_server(Role::Standard).await;
+    let login = client.login_local("alice", "safe-password").await.unwrap();
+
+    assert!(login.expires_at > chrono::Utc::now().timestamp());
+    let identity = client.identity(&login.access_token).await.unwrap();
+    assert_eq!(identity.user_id, login.user_id);
+    assert_eq!(identity.username, "alice");
+    assert_eq!(identity.role, Role::Standard);
+    assert_eq!(identity.expires_at, Some(login.expires_at));
+}
+
+#[tokio::test]
 async fn connector_logs_in_downloads_catalog_and_uploads_override() {
     let (client, directory) = test_server(Role::Standard).await;
     let login = client.login_local("alice", "safe-password").await.unwrap();
