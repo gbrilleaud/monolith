@@ -1,0 +1,14 @@
+listen = "127.0.0.1:8787"
+database_path = "data/backend.db"
+
+[auth]
+# local | sso | hybrid
+mode = "local"
+session_ttl_seconds = 86400
+
+[auth.oidc]
+# Obligatoires en mode sso ou hybrid.
+# issuer = "https://sso.example.net/realms/monolith"
+# audience = "monolith"
+# jwks_url = "https://sso.example.net/realms/monolith/protocol/openid-connect/certs"
+auto_provision = false

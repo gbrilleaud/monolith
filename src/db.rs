@@ -1,4 +1,9 @@
+use crate::auth::{
+    generate_session_token, hash_password, token_fingerprint, verify_password, AuthPrincipal,
+    AuthSource, Role,
+};
 use crate::models::{CacheSnapshot, GameMetadata, SystemSummary, UserOverride};
+use anyhow::{anyhow, bail, Result as AnyResult};
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension, Result};
 use std::path::Path;
@@ -44,6 +49,21 @@ impl Database {
                updated_at TEXT NOT NULL,
                PRIMARY KEY (user_id, game_id)
              );
+             CREATE TABLE IF NOT EXISTS users (
+               user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+               username TEXT NOT NULL UNIQUE,
+               password_hash TEXT,
+               sso_subject TEXT UNIQUE,
+               role TEXT NOT NULL DEFAULT 'read_only',
+               enabled INTEGER NOT NULL DEFAULT 1,
+               created_at TEXT NOT NULL
+             );
+             CREATE TABLE IF NOT EXISTS sessions (
+               token_hash TEXT PRIMARY KEY,
+               user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+               expires_at INTEGER NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
              CREATE INDEX IF NOT EXISTS idx_games_system ON games(system_id, title);",
         )
     }
@@ -136,6 +156,170 @@ impl Database {
             games: self.resolved_games(user_id)?,
         })
     }
+
+    pub fn create_local_user(&self, username: &str, password: &str, role: Role) -> AnyResult<i64> {
+        if username.trim().is_empty() {
+            bail!("le nom utilisateur est vide");
+        }
+        if password.len() < 8 {
+            bail!("le mot de passe doit contenir au moins 8 caractères");
+        }
+        let password_hash = hash_password(password)?;
+        self.conn.execute(
+            "INSERT INTO users(username, password_hash, role, created_at) VALUES (?1, ?2, ?3, ?4)",
+            params![
+                username.trim(),
+                password_hash,
+                role.as_str(),
+                Utc::now().to_rfc3339()
+            ],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn authenticate_local(
+        &self,
+        username: &str,
+        password: &str,
+        ttl_seconds: i64,
+    ) -> AnyResult<Option<AuthPrincipal>> {
+        let record: Option<(i64, String, String, bool)> = self
+            .conn
+            .query_row(
+                "SELECT user_id, password_hash, role, enabled FROM users WHERE username=?1",
+                [username],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .optional()?;
+        let Some((user_id, encoded, role, enabled)) = record else {
+            return Ok(None);
+        };
+        if !enabled || !verify_password(password, &encoded) {
+            return Ok(None);
+        }
+        let role = Role::parse(&role).ok_or_else(|| anyhow!("rôle invalide en base"))?;
+        let token = generate_session_token();
+        let expires_at = Utc::now().timestamp() + ttl_seconds;
+        self.conn.execute(
+            "INSERT INTO sessions(token_hash, user_id, expires_at) VALUES (?1, ?2, ?3)",
+            params![token_fingerprint(&token), user_id, expires_at],
+        )?;
+        Ok(Some(AuthPrincipal {
+            user_id,
+            username: username.into(),
+            role,
+            source: AuthSource::Local,
+            token,
+        }))
+    }
+
+    pub fn resolve_local_session(&self, token: &str) -> AnyResult<Option<AuthPrincipal>> {
+        let record: Option<(i64, String, String)> = self
+            .conn
+            .query_row(
+                "SELECT u.user_id, u.username, u.role FROM sessions s
+                 JOIN users u ON u.user_id=s.user_id
+                 WHERE s.token_hash=?1 AND s.expires_at>?2 AND u.enabled=1",
+                params![token_fingerprint(token), Utc::now().timestamp()],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .optional()?;
+        record
+            .map(|(user_id, username, role)| {
+                Ok(AuthPrincipal {
+                    user_id,
+                    username,
+                    role: Role::parse(&role).ok_or_else(|| anyhow!("rôle invalide en base"))?,
+                    source: AuthSource::Local,
+                    token: token.into(),
+                })
+            })
+            .transpose()
+    }
+
+    pub fn set_user_enabled(&self, user_id: i64, enabled: bool) -> Result<()> {
+        self.conn.execute(
+            "UPDATE users SET enabled=?1 WHERE user_id=?2",
+            params![enabled, user_id],
+        )?;
+        if !enabled {
+            self.conn
+                .execute("DELETE FROM sessions WHERE user_id=?1", [user_id])?;
+        }
+        Ok(())
+    }
+
+    pub fn upsert_sso_user(
+        &self,
+        subject: &str,
+        username: &str,
+        role: Role,
+        auto_provision: bool,
+    ) -> AnyResult<Option<AuthPrincipal>> {
+        let existing: Option<(i64, String, String, bool)> = self
+            .conn
+            .query_row(
+                "SELECT user_id, username, role, enabled FROM users WHERE sso_subject=?1",
+                [subject],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .optional()?;
+        let record = match existing {
+            Some(value) => value,
+            None if auto_provision => {
+                let stored_username = format!("sso:{username}");
+                self.conn.execute(
+                    "INSERT INTO users(username, sso_subject, role, created_at) VALUES (?1, ?2, ?3, ?4)",
+                    params![stored_username, subject, role.as_str(), Utc::now().to_rfc3339()],
+                )?;
+                (
+                    self.conn.last_insert_rowid(),
+                    format!("sso:{username}"),
+                    role.as_str().into(),
+                    true,
+                )
+            }
+            None => return Ok(None),
+        };
+        if !record.3 {
+            return Ok(None);
+        }
+        Ok(Some(AuthPrincipal {
+            user_id: record.0,
+            username: record.1,
+            role: Role::parse(&record.2).ok_or_else(|| anyhow!("rôle invalide en base"))?,
+            source: AuthSource::Sso,
+            token: String::new(),
+        }))
+    }
+
+    pub fn list_users(&self) -> AnyResult<Vec<UserRecord>> {
+        let mut statement = self.conn.prepare(
+            "SELECT user_id, username, role, enabled, sso_subject IS NOT NULL
+             FROM users ORDER BY username",
+        )?;
+        let records = statement
+            .query_map([], |row| {
+                Ok(UserRecord {
+                    user_id: row.get(0)?,
+                    username: row.get(1)?,
+                    role: row.get(2)?,
+                    enabled: row.get(3)?,
+                    sso: row.get(4)?,
+                })
+            })?
+            .collect::<Result<Vec<_>>>()?;
+        Ok(records)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct UserRecord {
+    pub user_id: i64,
+    pub username: String,
+    pub role: String,
+    pub enabled: bool,
+    pub sso: bool,
 }
 
 fn map_game(row: &rusqlite::Row<'_>) -> Result<GameMetadata> {

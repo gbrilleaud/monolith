@@ -54,11 +54,26 @@ La table `user_overrides` est indexée par `(user_id, game_id)`. Les champs non 
 - `src/ui.rs` : interface egui ;
 - `src/cache.rs` : lecture et écriture atomique du cache ;
 - `src/sync.rs` : première tranche de *The Brain* ;
+- `src/backend_client.rs` : connecteur HTTP et publication du cache hors ligne ;
+- `src/backend.rs` : API HTTP versionnée ;
+- `src/auth.rs` : authentification locale et vérification OIDC ;
+- `src/bin/monolith-backend.rs` : service backend ;
+- `src/bin/monolith-admin.rs` : CLI d’administration ;
 - `tests/core.rs` : comportements critiques testés.
+
+## Backend et authentification
+
+Le backend propose des modes `local`, `sso` et `hybrid`. En mode hybride, l’authentification autonome et l’OIDC fonctionnent simultanément. Voir [`BACKEND.md`](BACKEND.md) et [`config/backend.example.toml`](config/backend.example.toml).
+
+```bash
+cp config/backend.example.toml config/backend.toml
+cargo run --bin monolith-admin -- config check
+cargo run --bin monolith-backend
+```
 
 ## Limites actuelles
 
-- aucun connecteur réseau de récolte ou de synchronisation distante ;
+- aucun connecteur de récolte IGDB/SteamGridDB ;
 - aucun téléchargement de jaquette ; le chemin ou l'URL est seulement enregistré ;
-- authentification encore remplacée par un identifiant de profil local (`1`) ;
+- l’écran de connexion du client egui n’est pas encore câblé au connecteur ;
 - chemins NAS et adaptateurs d'émulateurs à définir.

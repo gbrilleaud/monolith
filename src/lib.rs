@@ -1,3 +1,7 @@
+pub mod auth;
+pub mod backend;
+pub mod backend_client;
+pub mod backend_config;
 pub mod cache;
 pub mod db;
 pub mod models;
