@@ -2,7 +2,10 @@ use crate::auth::{
     generate_session_token, hash_password, token_fingerprint, verify_password, AuthPrincipal,
     AuthSource, Role,
 };
-use crate::models::{CacheSnapshot, GameMetadata, SystemSummary, UserOverride};
+use crate::models::{
+    CacheSnapshot, GameMetadata, RomAvailability, RomLocation, ScanObservation, ScanRoot,
+    SystemSummary, UserOverride,
+};
 use anyhow::{anyhow, bail, Result as AnyResult};
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension, Result};
@@ -64,8 +67,85 @@ impl Database {
                expires_at INTEGER NOT NULL
              );
              CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
-             CREATE INDEX IF NOT EXISTS idx_games_system ON games(system_id, title);",
+             CREATE INDEX IF NOT EXISTS idx_games_system ON games(system_id, title);
+             CREATE TABLE IF NOT EXISTS rom_locations (
+               id INTEGER PRIMARY KEY,
+               game_id INTEGER REFERENCES games(game_id),
+               system_id INTEGER NOT NULL,
+               path TEXT NOT NULL UNIQUE,
+               extension TEXT NOT NULL,
+               size_bytes INTEGER NOT NULL,
+               modified_at INTEGER,
+               sha256 TEXT,
+               availability TEXT NOT NULL CHECK (availability IN ('available', 'missing')),
+               last_seen_at TEXT NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS idx_rom_locations_system_availability
+               ON rom_locations(system_id, availability);",
         )
+    }
+
+    pub fn sync_rom_inventory(
+        &self,
+        root: &ScanRoot,
+        observations: &[ScanObservation],
+    ) -> Result<usize> {
+        let normalized_root = root.path.trim_end_matches('/');
+        let root_prefix = format!("{normalized_root}/");
+        let now = Utc::now().to_rfc3339();
+        let transaction = self.conn.unchecked_transaction()?;
+
+        transaction.execute(
+            "UPDATE rom_locations
+             SET availability='missing'
+             WHERE system_id=?1 AND availability='available'
+               AND (path=?2 OR substr(path, 1, length(?3))=?3)",
+            params![root.system_id, normalized_root, root_prefix],
+        )?;
+
+        for observation in observations {
+            transaction.execute(
+                "INSERT INTO rom_locations(
+                    game_id, system_id, path, extension, size_bytes, modified_at, sha256,
+                    availability, last_seen_at
+                 ) VALUES (NULL, ?1, ?2, ?3, ?4, ?5, NULL, 'available', ?6)
+                 ON CONFLICT(path) DO UPDATE SET
+                    system_id=excluded.system_id,
+                    extension=excluded.extension,
+                    size_bytes=excluded.size_bytes,
+                    modified_at=excluded.modified_at,
+                    availability='available',
+                    last_seen_at=excluded.last_seen_at",
+                params![
+                    observation.system_id,
+                    observation.path,
+                    observation.extension,
+                    observation.size_bytes,
+                    observation.modified_at,
+                    now,
+                ],
+            )?;
+        }
+
+        let missing = transaction.query_row(
+            "SELECT COUNT(*) FROM rom_locations
+             WHERE system_id=?1 AND availability='missing'
+               AND (path=?2 OR substr(path, 1, length(?3))=?3)",
+            params![root.system_id, normalized_root, root_prefix],
+            |row| row.get::<_, i64>(0),
+        )? as usize;
+        transaction.commit()?;
+        Ok(missing)
+    }
+
+    pub fn rom_locations(&self) -> Result<Vec<RomLocation>> {
+        let mut statement = self.conn.prepare(
+            "SELECT id, game_id, system_id, path, extension, size_bytes, modified_at, sha256,
+                    availability, last_seen_at
+             FROM rom_locations ORDER BY path",
+        )?;
+        let locations = statement.query_map([], map_rom_location)?.collect();
+        locations
     }
 
     pub fn upsert_game(&self, game: &GameMetadata) -> Result<()> {
@@ -323,6 +403,26 @@ pub struct UserRecord {
     pub role: String,
     pub enabled: bool,
     pub sso: bool,
+}
+
+fn map_rom_location(row: &rusqlite::Row<'_>) -> Result<RomLocation> {
+    let availability = match row.get::<_, String>(8)?.as_str() {
+        "available" => RomAvailability::Available,
+        "missing" => RomAvailability::Missing,
+        _ => return Err(rusqlite::Error::InvalidQuery),
+    };
+    Ok(RomLocation {
+        id: row.get(0)?,
+        game_id: row.get(1)?,
+        system_id: row.get(2)?,
+        path: row.get(3)?,
+        extension: row.get(4)?,
+        size_bytes: row.get(5)?,
+        modified_at: row.get(6)?,
+        sha256: row.get(7)?,
+        availability,
+        last_seen_at: row.get(9)?,
+    })
 }
 
 fn map_game(row: &rusqlite::Row<'_>) -> Result<GameMetadata> {
