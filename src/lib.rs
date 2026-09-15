@@ -6,6 +6,7 @@ pub mod cache;
 pub mod client_auth;
 pub mod cover;
 pub mod db;
+pub mod inventory;
 pub mod models;
 pub mod navigation;
 pub mod session_store;
