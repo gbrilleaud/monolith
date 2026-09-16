@@ -1,7 +1,9 @@
 use monolith::{
     cache::{load_cache, write_cache_atomic},
     db::Database,
-    models::{GameMetadata, UserOverride},
+    models::{
+        GameMetadata, LaunchAvailability, ScanObservation, ScanRoot, UserOverride,
+    },
     navigation::{AppView, Navigator},
     sync::SyncEngine,
 };
@@ -15,6 +17,7 @@ fn sample_game() -> GameMetadata {
         description: "Description récoltée".into(),
         cover_art: Some("harvest.jpg".into()),
         language: "fr".into(),
+        launch_availability: LaunchAvailability::default(),
     }
 }
 
@@ -68,6 +71,51 @@ fn cache_round_trip_preserves_resolved_catalog() {
     std::fs::remove_file(path).unwrap();
 
     assert_eq!(loaded, snapshot);
+}
+
+#[test]
+fn cache_exposes_launch_availability_from_linked_rom_locations() {
+    let db = Database::open_in_memory().unwrap();
+    db.upsert_game(&sample_game()).unwrap();
+    let root = ScanRoot {
+        system_id: 2,
+        path: "/library/dreamcast".into(),
+        extensions: vec!["chd".into()],
+    };
+    let path = "/library/dreamcast/Rayman 2.chd";
+    db.sync_rom_inventory(
+        &root,
+        &[ScanObservation {
+            system_id: 2,
+            path: path.into(),
+            extension: "chd".into(),
+            size_bytes: 123,
+            modified_at: Some(10),
+        }],
+    )
+    .unwrap();
+    db.assign_rom_location_to_game(path, 7).unwrap();
+
+    let snapshot = db.build_cache(42).unwrap();
+    assert_eq!(
+        snapshot.games[0].launch_availability,
+        LaunchAvailability {
+            available: true,
+            location_count: 1,
+            preferred_path: Some(path.into()),
+        }
+    );
+
+    db.sync_rom_inventory(&root, &[]).unwrap();
+    let snapshot = db.build_cache(42).unwrap();
+    assert_eq!(
+        snapshot.games[0].launch_availability,
+        LaunchAvailability {
+            available: false,
+            location_count: 0,
+            preferred_path: None,
+        }
+    );
 }
 
 #[test]

@@ -200,6 +200,7 @@ async fn authenticated_override_sync_runs_in_background_and_refreshes_cache() {
             description: "Récoltée".into(),
             cover_art: None,
             language: "fr".into(),
+            launch_availability: Default::default(),
         })
         .unwrap();
     let config = BackendConfig {

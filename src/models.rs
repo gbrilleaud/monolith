@@ -68,6 +68,13 @@ pub struct ScanReport {
     pub issues: Vec<ScanIssue>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct LaunchAvailability {
+    pub available: bool,
+    pub location_count: usize,
+    pub preferred_path: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GameMetadata {
     pub game_id: i64,
@@ -77,6 +84,8 @@ pub struct GameMetadata {
     pub description: String,
     pub cover_art: Option<String>,
     pub language: String,
+    #[serde(default)]
+    pub launch_availability: LaunchAvailability,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

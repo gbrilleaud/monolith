@@ -3,8 +3,8 @@ use crate::auth::{
     AuthSource, Role,
 };
 use crate::models::{
-    CacheSnapshot, GameMetadata, RomAvailability, RomLocation, ScanObservation, ScanRoot,
-    SystemSummary, UserOverride,
+    CacheSnapshot, GameMetadata, LaunchAvailability, RomAvailability, RomLocation, ScanObservation,
+    ScanRoot, SystemSummary, UserOverride,
 };
 use anyhow::{anyhow, bail, Result as AnyResult};
 use chrono::Utc;
@@ -138,6 +138,14 @@ impl Database {
         Ok(missing)
     }
 
+    pub fn assign_rom_location_to_game(&self, path: &str, game_id: i64) -> Result<()> {
+        self.conn.execute(
+            "UPDATE rom_locations SET game_id=?1 WHERE path=?2",
+            params![game_id, path],
+        )?;
+        Ok(())
+    }
+
     pub fn rom_locations(&self) -> Result<Vec<RomLocation>> {
         let mut statement = self.conn.prepare(
             "SELECT id, game_id, system_id, path, extension, size_bytes, modified_at, sha256,
@@ -183,8 +191,11 @@ impl Database {
     pub fn base_game(&self, game_id: i64) -> Result<Option<GameMetadata>> {
         self.conn
             .query_row(
-                "SELECT game_id, system_id, system_name, title, description, cover_art, language
-             FROM games WHERE game_id=?1",
+                "SELECT g.game_id, g.system_id, g.system_name, g.title, g.description, g.cover_art, g.language,
+                        EXISTS(SELECT 1 FROM rom_locations r WHERE r.game_id=g.game_id AND r.availability='available'),
+                        (SELECT COUNT(*) FROM rom_locations r WHERE r.game_id=g.game_id AND r.availability='available'),
+                        (SELECT MIN(path) FROM rom_locations r WHERE r.game_id=g.game_id AND r.availability='available')
+                 FROM games g WHERE g.game_id=?1",
                 [game_id],
                 map_game,
             )
@@ -194,7 +205,10 @@ impl Database {
     pub fn resolved_game(&self, user_id: i64, game_id: i64) -> Result<Option<GameMetadata>> {
         self.conn.query_row(
             "SELECT g.game_id, g.system_id, g.system_name, g.title,
-                    COALESCE(o.description, g.description), COALESCE(o.cover_art, g.cover_art), g.language
+                    COALESCE(o.description, g.description), COALESCE(o.cover_art, g.cover_art), g.language,
+                    EXISTS(SELECT 1 FROM rom_locations r WHERE r.game_id=g.game_id AND r.availability='available'),
+                    (SELECT COUNT(*) FROM rom_locations r WHERE r.game_id=g.game_id AND r.availability='available'),
+                    (SELECT MIN(path) FROM rom_locations r WHERE r.game_id=g.game_id AND r.availability='available')
              FROM games g LEFT JOIN user_overrides o
                ON o.game_id=g.game_id AND o.user_id=?1
              WHERE g.game_id=?2", params![user_id, game_id], map_game,
@@ -204,7 +218,10 @@ impl Database {
     pub fn resolved_games(&self, user_id: i64) -> Result<Vec<GameMetadata>> {
         let mut statement = self.conn.prepare(
             "SELECT g.game_id, g.system_id, g.system_name, g.title,
-                    COALESCE(o.description, g.description), COALESCE(o.cover_art, g.cover_art), g.language
+                    COALESCE(o.description, g.description), COALESCE(o.cover_art, g.cover_art), g.language,
+                    EXISTS(SELECT 1 FROM rom_locations r WHERE r.game_id=g.game_id AND r.availability='available'),
+                    (SELECT COUNT(*) FROM rom_locations r WHERE r.game_id=g.game_id AND r.availability='available'),
+                    (SELECT MIN(path) FROM rom_locations r WHERE r.game_id=g.game_id AND r.availability='available')
              FROM games g LEFT JOIN user_overrides o
                ON o.game_id=g.game_id AND o.user_id=?1
              ORDER BY g.system_name, g.title")?;
@@ -434,5 +451,10 @@ fn map_game(row: &rusqlite::Row<'_>) -> Result<GameMetadata> {
         description: row.get(4)?,
         cover_art: row.get(5)?,
         language: row.get(6)?,
+        launch_availability: LaunchAvailability {
+            available: row.get(7)?,
+            location_count: row.get::<_, i64>(8)? as usize,
+            preferred_path: row.get(9)?,
+        },
     })
 }

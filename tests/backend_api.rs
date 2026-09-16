@@ -16,6 +16,7 @@ fn game() -> GameMetadata {
         description: "Harvest".into(),
         cover_art: None,
         language: "fr".into(),
+        launch_availability: Default::default(),
     }
 }
 
