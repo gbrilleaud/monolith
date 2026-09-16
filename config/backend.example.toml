@@ -12,3 +12,15 @@ session_ttl_seconds = 86400
 # audience = "monolith"
 # jwks_url = "https://sso.example.net/realms/monolith/protocol/openid-connect/certs"
 auto_provision = false
+
+# Chaque racine est lue par le scanner sans déplacer, renommer ou supprimer de ROM.
+# Utiliser le chemin de montage local du NAS ; ne pas inscrire un chemin SMB/UNC ici.
+[[library.roots]]
+system_id = 1
+path = "/mnt/roms/megadrive"
+extensions = ["zip", "7z", "bin", "md"]
+
+[[library.roots]]
+system_id = 2
+path = "/mnt/roms/dreamcast"
+extensions = ["chd", "gdi", "cue"]

@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::{fs, net::SocketAddr, path::Path};
 
-use crate::auth::AuthMode;
+use crate::{auth::AuthMode, models::ScanRoot};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
@@ -10,6 +10,33 @@ pub struct BackendConfig {
     pub listen: SocketAddr,
     pub database_path: String,
     pub auth: AuthConfig,
+    pub library: LibraryConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(default)]
+pub struct LibraryConfig {
+    pub roots: Vec<ScanRoot>,
+}
+
+impl LibraryConfig {
+    fn normalize_and_validate(&mut self) -> Result<()> {
+        for root in &mut self.roots {
+            root.extensions = root
+                .extensions
+                .iter()
+                .map(|extension| {
+                    extension
+                        .trim()
+                        .trim_start_matches('.')
+                        .to_ascii_lowercase()
+                })
+                .filter(|extension| !extension.is_empty())
+                .collect();
+            root.validate()?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -35,6 +62,7 @@ impl Default for BackendConfig {
             listen: "127.0.0.1:8787".parse().expect("adresse par défaut valide"),
             database_path: "data/backend.db".into(),
             auth: AuthConfig::default(),
+            library: LibraryConfig::default(),
         }
     }
 }
@@ -53,23 +81,30 @@ impl BackendConfig {
     pub fn load(path: &Path) -> Result<Self> {
         let raw =
             fs::read_to_string(path).with_context(|| format!("lecture de {}", path.display()))?;
-        let config: Self = toml::from_str(&raw).context("configuration TOML invalide")?;
-        config.validate()?;
+        let mut config: Self = toml::from_str(&raw).context("configuration TOML invalide")?;
+        config.normalize_and_validate()?;
         Ok(config)
     }
 
     pub fn save(&self, path: &Path) -> Result<()> {
-        self.validate()?;
+        let mut config = self.clone();
+        config.normalize_and_validate()?;
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
         let temporary = path.with_extension("toml.tmp");
-        fs::write(&temporary, toml::to_string_pretty(self)?)?;
+        fs::write(&temporary, toml::to_string_pretty(&config)?)?;
         fs::rename(temporary, path)?;
         Ok(())
     }
 
+    fn normalize_and_validate(&mut self) -> Result<()> {
+        self.library.normalize_and_validate()?;
+        self.validate()
+    }
+
     pub fn validate(&self) -> Result<()> {
+        self.library.clone().normalize_and_validate()?;
         if self.database_path.trim().is_empty() {
             bail!("database_path ne peut pas être vide");
         }
