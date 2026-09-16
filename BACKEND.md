@@ -61,6 +61,8 @@ monolith-admin library unlink <rom-path>
 
 Le client egui peut déclencher ce même scan local en arrière-plan pour les comptes connectés `standard` et `admin`. Il lit les racines depuis `MONOLITH_LIBRARY_CONFIG` ou, par défaut, `config/backend.toml`; une absence de configuration masque l’action. Les comptes `read_only` et le mode hors ligne conservent uniquement la visualisation des états.
 
+Le panneau **Backoffice ROMs** du client egui expose l’association sans shell, uniquement aux comptes connectés `admin`. Il liste les ROMs non liées et ne propose que les jeux du même système ; l’association est écrite dans SQLite puis le cache JSON local est régénéré. Aucun chemin de ROM ni fichier NAS n’est déplacé, renommé ou supprimé.
+
 La sortie contient les totaux `visités`, `acceptés`, `ignorés`, `absents` et `erreurs`. `library status` affiche le nombre de ROMs disponibles et absentes par système ; `--system-id` restreint ce tableau à un système. `library unlinked` liste les ROMs à associer explicitement. `library link` refuse une association entre systèmes différents ; `library unlink` retire seulement la liaison et ne supprime jamais le fichier ni son observation SQLite.
 
 Le mot de passe n'est volontairement pas accepté en argument : cela évite son exposition dans l'historique shell et la liste des processus. La désactivation d'un compte révoque toutes ses sessions locales.

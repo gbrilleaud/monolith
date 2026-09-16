@@ -3,7 +3,7 @@ use crate::client_auth::{AuthState, ClientAuth};
 use crate::client_inventory::{ClientInventory, InventoryRefreshState};
 use crate::cover::cover_uri;
 use crate::db::Database;
-use crate::models::{LaunchAvailability, ScanRoot, UserOverride};
+use crate::models::{GameMetadata, LaunchAvailability, ScanRoot, UserOverride};
 use crate::navigation::{AppView, Navigator};
 use crate::sync::SyncEngine;
 use eframe::egui;
@@ -31,6 +31,9 @@ pub struct MonolithApp {
     password: String,
     bearer_token: String,
     use_sso: bool,
+    show_association_backoffice: bool,
+    association_search: String,
+    selected_rom_path: Option<String>,
 }
 
 impl MonolithApp {
@@ -59,7 +62,104 @@ impl MonolithApp {
             password: String::new(),
             bearer_token: String::new(),
             use_sso: false,
+            show_association_backoffice: false,
+            association_search: String::new(),
+            selected_rom_path: None,
         }
+    }
+
+    fn refresh_cache_for_active_user(&mut self) -> Result<(), String> {
+        let user_id = self
+            .active_user_id()
+            .ok_or_else(|| "session utilisateur absente".to_owned())?;
+        SyncEngine::new(&self.db, user_id, &self.cache_path)
+            .refresh_local_cache()
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
+
+    fn render_association_backoffice(&mut self, context: &egui::Context) {
+        if !self.show_association_backoffice {
+            return;
+        }
+        let mut open = true;
+        egui::Window::new("Backoffice · Associations ROM")
+            .open(&mut open)
+            .resizable(true)
+            .default_width(900.0)
+            .show(context, |ui| {
+                ui.label("Sélectionnez une ROM non associée, puis un jeu du même système.");
+                ui.separator();
+                let locations = match self.db.unlinked_rom_locations() {
+                    Ok(locations) => locations,
+                    Err(error) => {
+                        ui.colored_label(egui::Color32::RED, format!("SQLite : {error}"));
+                        return;
+                    }
+                };
+                ui.columns(2, |columns| {
+                    columns[0].heading("ROMs non associées");
+                    egui::ScrollArea::vertical()
+                        .max_height(420.0)
+                        .show(&mut columns[0], |ui| {
+                            for location in &locations {
+                                let selected = self.selected_rom_path.as_deref() == Some(&location.path);
+                                if ui
+                                    .selectable_label(
+                                        selected,
+                                        format!("[{}] {}", location.system_id, location.path),
+                                    )
+                                    .clicked()
+                                {
+                                    self.selected_rom_path = Some(location.path.clone());
+                                    self.association_search.clear();
+                                }
+                            }
+                        });
+
+                    columns[1].heading("Jeux compatibles");
+                    let selected_rom = self
+                        .selected_rom_path
+                        .as_deref()
+                        .and_then(|path| locations.iter().find(|location| location.path == path));
+                    let Some(rom) = selected_rom else {
+                        columns[1].label("Choisissez une ROM à gauche.");
+                        return;
+                    };
+                    columns[1].label(format!("Système {} · {}", rom.system_id, rom.extension));
+                    columns[1].add(
+                        egui::TextEdit::singleline(&mut self.association_search)
+                            .hint_text("Rechercher un jeu…"),
+                    );
+                    let games = match self.db.resolved_games(self.active_user_id().unwrap_or(1)) {
+                        Ok(games) => association_candidates(games, rom.system_id, &self.association_search),
+                        Err(error) => {
+                            columns[1].colored_label(egui::Color32::RED, format!("SQLite : {error}"));
+                            return;
+                        }
+                    };
+                    egui::ScrollArea::vertical()
+                        .max_height(340.0)
+                        .show(&mut columns[1], |ui| {
+                            for game in games {
+                                if ui.button(format!("Associer · {}", game.title)).clicked() {
+                                    match self.db.link_rom_location_to_game(&rom.path, game.game_id) {
+                                        Ok(()) => match self.refresh_cache_for_active_user() {
+                                            Ok(()) => {
+                                                self.notice = Some(format!("ROM associée à {}", game.title));
+                                                self.selected_rom_path = None;
+                                                self.association_search.clear();
+                                            }
+                                            Err(error) => self.notice = Some(format!("Association enregistrée, cache non actualisé : {error}")),
+                                        },
+                                        Err(error) => self.notice = Some(format!("Association refusée : {error}")),
+                                    }
+                                }
+                            }
+                        });
+                });
+            });
+        self.show_association_backoffice = open;
     }
 
     fn begin_edit(&mut self, game_id: i64) {
@@ -252,6 +352,9 @@ impl eframe::App for MonolithApp {
                     }
                     _ => {}
                 }
+                if self.can_manage_associations() && ui.button("Backoffice ROMs").clicked() {
+                    self.show_association_backoffice = true;
+                }
                 if self.can_scan_library() {
                     let scanning = self
                         .inventory
@@ -284,6 +387,7 @@ impl eframe::App for MonolithApp {
             self.nav.home();
             return;
         }
+        self.render_association_backoffice(context);
 
         let current = self.nav.current().clone();
         egui::CentralPanel::default().show(context, |ui| match current {
@@ -302,6 +406,10 @@ impl MonolithApp {
             AuthState::Offline { user_id } => Some(*user_id),
             _ => None,
         }
+    }
+
+    fn can_manage_associations(&self) -> bool {
+        matches!(self.auth.state(), AuthState::Authenticated(session) if matches!(session.role, crate::auth::Role::Admin))
     }
 
     fn can_scan_library(&self) -> bool {
@@ -568,6 +676,18 @@ impl MonolithApp {
             }
         }
     }
+}
+
+pub fn association_candidates(
+    games: Vec<GameMetadata>,
+    system_id: i64,
+    search: &str,
+) -> Vec<GameMetadata> {
+    let needle = search.trim().to_lowercase();
+    games
+        .into_iter()
+        .filter(|game| game.system_id == system_id && game.title.to_lowercase().contains(&needle))
+        .collect()
 }
 
 pub fn availability_label(availability: &LaunchAvailability) -> String {
