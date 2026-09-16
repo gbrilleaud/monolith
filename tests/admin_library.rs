@@ -15,7 +15,7 @@ fn write_config(directory: &std::path::Path, library_root: &std::path::Path) -> 
                 [[library.roots]]
                 system_id = 42
                 path = "{}"
-                extensions = ["iso"]
+                extensions = ["iso", "zip"]
             "#,
             library_root.display()
         ),
@@ -183,4 +183,66 @@ fn library_link_rejects_a_game_from_another_system() {
     assert!(String::from_utf8(link.stderr)
         .unwrap()
         .contains("systèmes différents"));
+}
+
+#[test]
+fn catalog_add_creates_a_game_that_can_be_linked_to_a_scanned_rom() {
+    let directory = tempfile::tempdir().unwrap();
+    let roms = directory.path().join("roms");
+    fs::create_dir(&roms).unwrap();
+    let rom_path = roms.join("Global Gladiators (Europe).zip");
+    fs::write(&rom_path, b"game-image").unwrap();
+    let config = write_config(directory.path(), &roms);
+    assert!(admin(&config, &["library", "scan"]).status.success());
+
+    let add = admin(
+        &config,
+        &[
+            "catalog",
+            "add",
+            "--game-id",
+            "11001",
+            "--system-id",
+            "42",
+            "--system-name",
+            "Mega Drive / Genesis",
+            "--title",
+            "Global Gladiators",
+            "--language",
+            "fr",
+            "--description",
+            "Jeu de plates-formes et d’action.",
+        ],
+    );
+    assert!(
+        add.status.success(),
+        "{}",
+        String::from_utf8_lossy(&add.stderr)
+    );
+
+    let database = Database::open(&config.parent().unwrap().join("backend.db")).unwrap();
+    let game = database.base_game(11001).unwrap().unwrap();
+    assert_eq!(game.system_id, 42);
+    assert_eq!(game.system_name, "Mega Drive / Genesis");
+    assert_eq!(game.title, "Global Gladiators");
+    assert_eq!(game.language, "fr");
+    assert_eq!(game.description, "Jeu de plates-formes et d’action.");
+
+    let link = admin(
+        &config,
+        &["library", "link", &rom_path.display().to_string(), "11001"],
+    );
+    assert!(
+        link.status.success(),
+        "{}",
+        String::from_utf8_lossy(&link.stderr)
+    );
+    assert!(
+        database
+            .base_game(11001)
+            .unwrap()
+            .unwrap()
+            .launch_availability
+            .available
+    );
 }

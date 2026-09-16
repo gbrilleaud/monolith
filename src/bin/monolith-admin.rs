@@ -6,6 +6,7 @@ use monolith::{
     backend_config::BackendConfig,
     db::Database,
     inventory::scan_root,
+    models::{GameMetadata, LaunchAvailability},
 };
 use std::{io::Read, path::PathBuf};
 
@@ -35,6 +36,10 @@ enum Command {
     User {
         #[command(subcommand)]
         command: UserCommand,
+    },
+    Catalog {
+        #[command(subcommand)]
+        command: CatalogCommand,
     },
     Library {
         #[command(subcommand)]
@@ -86,6 +91,26 @@ enum LibraryCommand {
 }
 
 #[derive(Subcommand)]
+enum CatalogCommand {
+    Add {
+        #[arg(long)]
+        game_id: i64,
+        #[arg(long)]
+        system_id: i64,
+        #[arg(long)]
+        system_name: String,
+        #[arg(long)]
+        title: String,
+        #[arg(long, default_value = "fr")]
+        language: String,
+        #[arg(long)]
+        description: String,
+        #[arg(long)]
+        cover_art: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
 enum UserCommand {
     Add {
         username: String,
@@ -109,6 +134,7 @@ fn main() -> Result<()> {
         Command::Config { command } => run_config(command, &cli.config),
         Command::Auth { command } => run_auth(command, &cli.config),
         Command::User { command } => run_user(command, &cli.config),
+        Command::Catalog { command } => run_catalog(command, &cli.config),
         Command::Library { command } => run_library(command, &cli.config),
     }
 }
@@ -154,6 +180,40 @@ fn run_auth(command: AuthCommand, path: &std::path::Path) -> Result<()> {
             config.auth.oidc.auto_provision = auto_provision;
             config.save(path)?;
             println!("Mode d'authentification : {:?}", mode);
+        }
+    }
+    Ok(())
+}
+
+fn run_catalog(command: CatalogCommand, config_path: &std::path::Path) -> Result<()> {
+    let config = BackendConfig::load(config_path)?;
+    let directory = config_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
+    let state = BackendState::new(config, directory)?;
+    let database = Database::open(&state.database_path)?;
+
+    match command {
+        CatalogCommand::Add {
+            game_id,
+            system_id,
+            system_name,
+            title,
+            language,
+            description,
+            cover_art,
+        } => {
+            database.upsert_game(&GameMetadata {
+                game_id,
+                system_id,
+                system_name,
+                title: title.clone(),
+                description,
+                cover_art,
+                language,
+                launch_availability: LaunchAvailability::default(),
+            })?;
+            println!("Jeu ajouté au catalogue : {game_id} ({title})");
         }
     }
     Ok(())

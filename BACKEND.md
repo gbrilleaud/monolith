@@ -48,12 +48,15 @@ monolith-admin user add <nom> --role <read-only|standard|admin> --password-stdin
 monolith-admin user list
 monolith-admin user enable <id>
 monolith-admin user disable <id>
+monolith-admin catalog add --game-id <id> --system-id <id> --system-name <nom> --title <titre> --description <texte> [--language fr] [--cover-art <chemin-ou-url>]
 monolith-admin library scan
 monolith-admin library status [--system-id <id>]
 monolith-admin library unlinked
 monolith-admin library link <rom-path> <game-id>
 monolith-admin library unlink <rom-path>
 ```
+
+`catalog add` crée ou met à jour une fiche catalogue. La commande ne copie ni ne référence une ROM : l'association explicite avec un fichier déjà observé reste la responsabilité de `library link`.
 
 ### Inventaire des ROMs
 
