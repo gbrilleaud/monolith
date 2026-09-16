@@ -8,6 +8,7 @@ pub mod client_inventory;
 pub mod client_rom_download;
 pub mod cover;
 pub mod db;
+pub mod emulator_launcher;
 pub mod inventory;
 pub mod models;
 pub mod navigation;

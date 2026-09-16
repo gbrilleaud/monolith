@@ -55,6 +55,20 @@ Sans variable, les données sont écrites dans `./data` :
 - `monolith.db` : source SQLite locale ;
 - `monolith_cache_data.json` : vue résolue du catalogue pour le profil actif.
 - `session.json` : jeton, identité, rôle et expiration ; écriture atomique et mode `0600` sous Unix.
+- `emulators.toml` : adaptateurs d'émulateurs locaux facultatifs ; il n'est jamais téléchargé depuis le serveur.
+
+## Lancement local via RetroArch
+
+Monolith ne distribue pas RetroArch, ses cœurs ni les BIOS. Après avoir installé RetroArch localement, copiez `config/emulators.toml.example` dans le dossier de données client sous le nom `emulators.toml`, puis ajustez les chemins.
+
+Exemple Windows pour la Mega Drive :
+
+```powershell
+Copy-Item .\config\emulators.toml.example C:\MONOLITH\client-data\emulators.toml
+notepad C:\MONOLITH\client-data\emulators.toml
+```
+
+Le profil du système `11` utilise RetroArch et le cœur Genesis Plus GX. Le jeton `{rom}` est obligatoire : il est remplacé par le chemin local d'une ROM déjà disponible. Depuis la fiche, **Lancer** exécute l'adaptateur sans shell ; l'émulateur et son cœur restent exclusivement sur le PC client.
 
 ## Connexion du client
 
@@ -105,4 +119,4 @@ cargo run --bin monolith-backend
 - aucun connecteur de récolte IGDB/SteamGridDB ;
 - aucun téléversement binaire de jaquette vers le backend ; un fichier choisi reste référencé par son chemin local, tandis qu’une URL HTTP(S) est partageable entre clients ;
 - le flux SSO actuel attend un jeton OIDC fourni par un portail externe ; l’ouverture automatique du navigateur et PKCE restent à ajouter ;
-- chemins NAS et adaptateurs d'émulateurs à définir.
+- chemins NAS à définir ; les adaptateurs locaux Mega Drive → RetroArch sont disponibles pour les ROMs déjà présentes sur le client.

@@ -5,6 +5,7 @@ use crate::client_inventory::{ClientInventory, InventoryRefreshState};
 use crate::client_rom_download::{ClientRomDownload, RomDownloadState};
 use crate::cover::cover_uri;
 use crate::db::Database;
+use crate::emulator_launcher::EmulatorLauncher;
 use crate::models::{GameMetadata, LaunchAvailability, ScanRoot, UserOverride};
 use crate::navigation::{AppView, Navigator};
 use crate::sync::SyncEngine;
@@ -18,6 +19,7 @@ use std::{
 pub struct MonolithApp {
     db: Database,
     auth: ClientAuth,
+    emulator_launcher: EmulatorLauncher,
     nav: Navigator,
     search: String,
     edit_game_id: Option<i64>,
@@ -45,6 +47,7 @@ impl MonolithApp {
     pub fn new(
         db: Database,
         auth: ClientAuth,
+        emulator_launcher: EmulatorLauncher,
         database_path: PathBuf,
         library_roots: Vec<ScanRoot>,
         cache_path: PathBuf,
@@ -52,6 +55,7 @@ impl MonolithApp {
         Self {
             db,
             auth,
+            emulator_launcher,
             nav: Navigator::default(),
             search: String::new(),
             edit_game_id: None,
@@ -121,6 +125,18 @@ impl MonolithApp {
             .map_err(|error| error.to_string())?;
         self.downloading_game_id = Some(game.game_id);
         Ok(())
+    }
+
+    fn launch_game(&mut self, game: &GameMetadata) -> Result<(), String> {
+        let path = game
+            .launch_availability
+            .preferred_path
+            .as_deref()
+            .ok_or_else(|| "ROM locale introuvable".to_owned())?;
+        self.emulator_launcher
+            .launch(game.system_id, std::path::Path::new(path))
+            .map(|_| ())
+            .map_err(|error| error.to_string())
     }
 
     fn poll_rom_download(&mut self) {
@@ -707,6 +723,11 @@ impl MonolithApp {
                 ui.heading(&game.title);
                 ui.label(format!("{} · langue {}", game.system_name, game.language));
                 render_availability(ui, &game.launch_availability);
+                if game.launch_availability.available && ui.button("Lancer").clicked() {
+                    if let Err(error) = self.launch_game(&game) {
+                        self.notice = Some(format!("Lancement refusé : {error}"));
+                    }
+                }
                 if !game.launch_availability.available {
                     let downloading =
                         matches!(self.rom_download.state(), RomDownloadState::Downloading);

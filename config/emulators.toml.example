@@ -1,0 +1,12 @@
+# Copiez ce fichier vers C:\MONOLITH\client-data\emulators.toml sous Windows,
+# puis ajustez les chemins de votre installation locale de RetroArch.
+# Ce fichier reste local : aucun émulateur, BIOS ou ROM n'est distribué par Monolith.
+
+[[profile]]
+system_id = 11
+executable = 'C:\RetroArch\retroarch.exe'
+arguments = [
+  "-L",
+  'C:\RetroArch\cores\genesis_plus_gx_libretro.dll',
+  "{rom}",
+]

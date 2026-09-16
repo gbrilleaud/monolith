@@ -1,6 +1,11 @@
 use monolith::{
-    backend_config::BackendConfig, client_auth::ClientAuth, db::Database,
-    session_store::SessionStore, sync::SyncEngine, ui::MonolithApp,
+    backend_config::BackendConfig,
+    client_auth::ClientAuth,
+    db::Database,
+    emulator_launcher::{default_config_path, EmulatorLauncher},
+    session_store::SessionStore,
+    sync::SyncEngine,
+    ui::MonolithApp,
 };
 use std::path::PathBuf;
 
@@ -24,6 +29,12 @@ fn main() -> eframe::Result<()> {
             .expect("publication du cache local impossible");
     }
 
+    let emulator_config_path = std::env::var_os("MONOLITH_EMULATOR_CONFIG")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| default_config_path(&data_dir));
+    let emulator_launcher = EmulatorLauncher::load(&emulator_config_path)
+        .unwrap_or_else(|error| panic!("configuration émulateurs impossible : {error}"));
+
     let backend_url =
         std::env::var("MONOLITH_BACKEND_URL").unwrap_or_else(|_| "http://127.0.0.1:8787".into());
     let session_store = SessionStore::new(data_dir.join("session.json"));
@@ -45,6 +56,7 @@ fn main() -> eframe::Result<()> {
             Ok(Box::new(MonolithApp::new(
                 database,
                 auth,
+                emulator_launcher,
                 database_path,
                 library_roots,
                 cache_path,
