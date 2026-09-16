@@ -78,9 +78,12 @@ Une configuration différente peut être choisie avec `--config /chemin/backend.
 - `POST /api/v1/auth/login` : session locale ;
 - `GET /api/v1/auth/me` : identité, rôle et expiration du Bearer ;
 - `GET /api/v1/catalog` : catalogue résolu du profil authentifié ;
+- `GET /api/v1/games/{game_id}/rom` : téléchargement d'une ROM associée et disponible, réservé aux comptes `standard` et `admin` ;
 - `PUT /api/v1/users/{user_id}/overrides/{game_id}` : surcharge utilisateur.
 
 Toutes les routes, sauf la santé et le login local, attendent l’en-tête `Authorization: Bearer [JETON]`.
+
+Le client place une ROM reçue dans son répertoire de données (`roms/<system_id>/`), vérifie l'empreinte SHA-256 fournie par le backend et publie le fichier seulement après validation via un fichier temporaire `.partial`. Le chemin NAS source n'est jamais inclus dans la réponse API.
 
 ## Sécurité actuelle
 

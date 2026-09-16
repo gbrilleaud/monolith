@@ -63,6 +63,13 @@ impl ClientAuth {
         &self.state
     }
 
+    pub fn authenticated_session(&self) -> Option<&ClientSession> {
+        match &self.state {
+            AuthState::Authenticated(session) => Some(session),
+            _ => None,
+        }
+    }
+
     pub fn auth_mode(&self) -> Option<AuthMode> {
         self.auth_mode
     }

@@ -4,7 +4,7 @@ use monolith::{
     backend_client::BackendClient,
     backend_config::BackendConfig,
     db::Database,
-    models::{GameMetadata, UserOverride},
+    models::{GameMetadata, ScanObservation, ScanRoot, UserOverride},
 };
 
 fn game() -> GameMetadata {
@@ -114,4 +114,67 @@ async fn read_only_account_can_download_but_not_upload() {
         .await
         .unwrap_err();
     assert!(error.to_string().contains("surcharge refusée"));
+}
+
+#[tokio::test]
+async fn standard_user_downloads_only_an_available_linked_rom_atomically() {
+    let directory = tempfile::tempdir().unwrap();
+    let database_path = directory.path().join("backend.db");
+    let source_path = directory.path().join("Global Gladiators (Europe).zip");
+    let source_bytes = b"private-rom-content";
+    std::fs::write(&source_path, source_bytes).unwrap();
+    let database = Database::open(&database_path).unwrap();
+    database
+        .create_local_user("alice", "safe-password", Role::Standard)
+        .unwrap();
+    database.upsert_game(&game()).unwrap();
+    let root = ScanRoot {
+        system_id: 10,
+        path: directory.path().display().to_string(),
+        extensions: vec!["zip".into()],
+    };
+    database
+        .sync_rom_inventory(
+            &root,
+            &[ScanObservation {
+                system_id: 10,
+                path: source_path.display().to_string(),
+                extension: "zip".into(),
+                size_bytes: source_bytes.len() as u64,
+                modified_at: None,
+            }],
+        )
+        .unwrap();
+    database
+        .link_rom_location_to_game(&source_path.display().to_string(), 1)
+        .unwrap();
+
+    let state = BackendState::new(
+        BackendConfig {
+            database_path: database_path.display().to_string(),
+            ..BackendConfig::default()
+        },
+        directory.path(),
+    )
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, router(state)).await.unwrap() });
+    let client = BackendClient::new(format!("http://{address}")).unwrap();
+    let login = client.login_local("alice", "safe-password").await.unwrap();
+    let destination = directory.path().join("client-data/roms/10");
+
+    let download = client
+        .download_game_rom(&login.access_token, 1, &destination)
+        .await
+        .unwrap();
+
+    let downloaded_path = destination.join("Global Gladiators (Europe).zip");
+    assert_eq!(std::fs::read(&downloaded_path).unwrap(), source_bytes);
+    assert_eq!(download.path, downloaded_path);
+    assert_eq!(download.size_bytes, source_bytes.len() as u64);
+    assert_eq!(download.file_name, "Global Gladiators (Europe).zip");
+    assert!(!destination
+        .join("Global Gladiators (Europe).zip.partial")
+        .exists());
 }

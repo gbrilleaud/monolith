@@ -2,6 +2,7 @@ use crate::auth::AuthMode;
 use crate::cache::load_cache;
 use crate::client_auth::{AuthState, ClientAuth};
 use crate::client_inventory::{ClientInventory, InventoryRefreshState};
+use crate::client_rom_download::{ClientRomDownload, RomDownloadState};
 use crate::cover::cover_uri;
 use crate::db::Database;
 use crate::models::{GameMetadata, LaunchAvailability, ScanRoot, UserOverride};
@@ -27,6 +28,8 @@ pub struct MonolithApp {
     database_path: PathBuf,
     library_roots: Vec<ScanRoot>,
     inventory: Option<ClientInventory>,
+    rom_download: ClientRomDownload,
+    downloading_game_id: Option<i64>,
     cache_path: PathBuf,
     imported_catalog_user_id: Option<i64>,
     username: String,
@@ -59,6 +62,8 @@ impl MonolithApp {
             database_path,
             library_roots,
             inventory: None,
+            rom_download: ClientRomDownload::new(),
+            downloading_game_id: None,
             cache_path,
             imported_catalog_user_id: None,
             username: String::new(),
@@ -91,6 +96,68 @@ impl MonolithApp {
             Err(error) => {
                 self.notice = Some(format!("Cache catalogue indisponible : {error}"));
             }
+        }
+    }
+
+    fn start_rom_download(&mut self, game: &GameMetadata) -> Result<(), String> {
+        let session = self
+            .auth
+            .authenticated_session()
+            .ok_or_else(|| "connexion au backend requise".to_owned())?;
+        if !session.role.can_write() {
+            return Err("compte non autorisé à télécharger des ROMs".into());
+        }
+        let data_directory = self
+            .database_path
+            .parent()
+            .ok_or_else(|| "dossier de données client introuvable".to_owned())?;
+        self.rom_download
+            .start(
+                session.backend_url.clone(),
+                session.access_token.clone(),
+                game.game_id,
+                data_directory.join("roms").join(game.system_id.to_string()),
+            )
+            .map_err(|error| error.to_string())?;
+        self.downloading_game_id = Some(game.game_id);
+        Ok(())
+    }
+
+    fn poll_rom_download(&mut self) {
+        let Some(state) = self.rom_download.poll().cloned() else {
+            return;
+        };
+        let game_id = self.downloading_game_id.take();
+        match state {
+            RomDownloadState::Completed(download) => {
+                let result = game_id
+                    .ok_or_else(|| anyhow::anyhow!("jeu téléchargé absent"))
+                    .and_then(|game_id| {
+                        self.db.record_downloaded_rom(
+                            game_id,
+                            &download.path,
+                            download.size_bytes,
+                            &download.sha256,
+                        )
+                    });
+                match result {
+                    Ok(()) => {
+                        self.notice = Some(format!(
+                            "ROM téléchargée et vérifiée : {}",
+                            download.path.display()
+                        ));
+                    }
+                    Err(error) => {
+                        self.notice = Some(format!(
+                            "ROM téléchargée mais inventaire local non mis à jour : {error}"
+                        ));
+                    }
+                }
+            }
+            RomDownloadState::Error(error) => {
+                self.notice = Some(format!("Téléchargement ROM échoué : {error}"));
+            }
+            _ => {}
         }
     }
 
@@ -324,6 +391,7 @@ impl eframe::App for MonolithApp {
     fn update(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_cover_picker();
         self.poll_inventory_scan();
+        self.poll_rom_download();
         self.auth.poll();
         self.import_remote_cache_for_active_user();
         if let Some(result) = self.auth.poll_override_sync() {
@@ -639,6 +707,27 @@ impl MonolithApp {
                 ui.heading(&game.title);
                 ui.label(format!("{} · langue {}", game.system_name, game.language));
                 render_availability(ui, &game.launch_availability);
+                if !game.launch_availability.available {
+                    let downloading =
+                        matches!(self.rom_download.state(), RomDownloadState::Downloading);
+                    if ui
+                        .add_enabled(
+                            self.can_edit() && !downloading,
+                            egui::Button::new("Télécharger la ROM"),
+                        )
+                        .clicked()
+                    {
+                        if let Err(error) = self.start_rom_download(&game) {
+                            self.notice = Some(format!("Téléchargement ROM refusé : {error}"));
+                        }
+                    }
+                    if downloading {
+                        ui.horizontal(|ui| {
+                            ui.spinner();
+                            ui.label("Téléchargement et vérification SHA-256 en cours…");
+                        });
+                    }
+                }
                 if self.can_manage_associations() {
                     ui.separator();
                     ui.label("ROMs associées");

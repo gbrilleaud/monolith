@@ -5,14 +5,16 @@ use crate::{
     models::{CacheSnapshot, UserOverride},
 };
 use axum::{
+    body::Body,
     extract::{Path, State},
-    http::{header::AUTHORIZATION, HeaderMap, StatusCode},
+    http::{header::AUTHORIZATION, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use sha2::{Digest, Sha256};
 use std::{path::PathBuf, sync::Arc};
 
 #[derive(Clone)]
@@ -51,6 +53,7 @@ pub fn router(state: BackendState) -> Router {
         .route("/api/v1/auth/login", post(local_login))
         .route("/api/v1/auth/me", get(identity))
         .route("/api/v1/catalog", get(catalog))
+        .route("/api/v1/games/:game_id/rom", get(download_game_rom))
         .route(
             "/api/v1/users/:user_id/overrides/:game_id",
             put(save_override),
@@ -148,6 +151,51 @@ async fn catalog(
         .build_cache(principal.user_id)
         .map_err(ApiError::internal)?;
     Ok(Json(snapshot))
+}
+
+async fn download_game_rom(
+    State(state): State<BackendState>,
+    headers: HeaderMap,
+    Path(game_id): Path<i64>,
+) -> Result<Response, ApiError> {
+    let principal = authenticate(&state, &headers).await?;
+    if !principal.role.can_write() {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "rom_download_forbidden",
+        ));
+    }
+    let location = state
+        .database()?
+        .available_rom_location_for_game(game_id)
+        .map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "rom_unavailable"))?;
+    let source = std::path::Path::new(&location.path);
+    let file_name = source
+        .file_name()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.is_empty() && !value.contains(['\r', '\n']))
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "rom_unavailable"))?;
+    let bytes = std::fs::read(source)
+        .map_err(|_| ApiError::new(StatusCode::NOT_FOUND, "rom_unavailable"))?;
+    if bytes.len() as u64 != location.size_bytes {
+        return Err(ApiError::new(StatusCode::CONFLICT, "rom_changed"));
+    }
+    let sha256 = format!("{:x}", Sha256::digest(&bytes));
+    let mut response = Response::new(Body::from(bytes));
+    response.headers_mut().insert(
+        "content-type",
+        HeaderValue::from_static("application/octet-stream"),
+    );
+    response.headers_mut().insert(
+        "x-monolith-file-name",
+        HeaderValue::from_str(file_name).map_err(ApiError::internal)?,
+    );
+    response.headers_mut().insert(
+        "x-monolith-sha256",
+        HeaderValue::from_str(&sha256).map_err(ApiError::internal)?,
+    );
+    Ok(response)
 }
 
 async fn save_override(

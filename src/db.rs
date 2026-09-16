@@ -202,6 +202,62 @@ impl Database {
         locations
     }
 
+    pub fn record_downloaded_rom(
+        &self,
+        game_id: i64,
+        path: &Path,
+        size_bytes: u64,
+        sha256: &str,
+    ) -> AnyResult<()> {
+        let system_id: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT system_id FROM games WHERE game_id=?1",
+                [game_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let system_id = system_id.ok_or_else(|| anyhow!("jeu introuvable : {game_id}"))?;
+        let extension = path
+            .extension()
+            .and_then(|value| value.to_str())
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| anyhow!("extension ROM absente : {}", path.display()))?;
+        self.conn.execute(
+            "INSERT INTO rom_locations(game_id, system_id, path, extension, size_bytes, modified_at, sha256,
+                                       availability, last_seen_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6, 'available', ?7)
+             ON CONFLICT(path) DO UPDATE SET
+                game_id=excluded.game_id, system_id=excluded.system_id, extension=excluded.extension,
+                size_bytes=excluded.size_bytes, sha256=excluded.sha256, availability='available',
+                last_seen_at=excluded.last_seen_at",
+            params![
+                game_id,
+                system_id,
+                path.display().to_string(),
+                extension.to_ascii_lowercase(),
+                size_bytes,
+                sha256,
+                Utc::now().to_rfc3339()
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn available_rom_location_for_game(&self, game_id: i64) -> Result<Option<RomLocation>> {
+        self.conn
+            .query_row(
+                "SELECT id, game_id, system_id, path, extension, size_bytes, modified_at, sha256,
+                        availability, last_seen_at
+                 FROM rom_locations
+                 WHERE game_id=?1 AND availability='available'
+                 ORDER BY path LIMIT 1",
+                [game_id],
+                map_rom_location,
+            )
+            .optional()
+    }
+
     pub fn upsert_game(&self, game: &GameMetadata) -> Result<()> {
         self.conn.execute(
             "INSERT INTO games(game_id, system_id, system_name, title, description, cover_art, language)
