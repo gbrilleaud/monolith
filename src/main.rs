@@ -1,6 +1,6 @@
 use monolith::{
-    client_auth::ClientAuth, db::Database, session_store::SessionStore, sync::SyncEngine,
-    ui::MonolithApp,
+    backend_config::BackendConfig, client_auth::ClientAuth, db::Database,
+    session_store::SessionStore, sync::SyncEngine, ui::MonolithApp,
 };
 use std::path::PathBuf;
 
@@ -9,8 +9,14 @@ fn main() -> eframe::Result<()> {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("data"));
     std::fs::create_dir_all(&data_dir).expect("impossible de créer le dossier de données");
-    let database =
-        Database::open(&data_dir.join("monolith.db")).expect("initialisation SQLite impossible");
+    let database_path = data_dir.join("monolith.db");
+    let database = Database::open(&database_path).expect("initialisation SQLite impossible");
+    let library_config_path = std::env::var_os("MONOLITH_LIBRARY_CONFIG")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("config/backend.toml"));
+    let library_roots = BackendConfig::load(&library_config_path)
+        .map(|config| config.library.roots)
+        .unwrap_or_default();
     let cache_path = data_dir.join("monolith_cache_data.json");
     if !cache_path.exists() {
         SyncEngine::new(&database, 1, &cache_path)
@@ -36,7 +42,13 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(move |creation_context| {
             egui_extras::install_image_loaders(&creation_context.egui_ctx);
-            Ok(Box::new(MonolithApp::new(database, auth, cache_path)))
+            Ok(Box::new(MonolithApp::new(
+                database,
+                auth,
+                database_path,
+                library_roots,
+                cache_path,
+            )))
         }),
     )
 }

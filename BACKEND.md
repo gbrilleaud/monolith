@@ -56,6 +56,8 @@ monolith-admin library status [--system-id <id>]
 
 `library scan` lit toutes les racines `[[library.roots]]` configurées, sans déplacer, renommer ni supprimer de fichier. Il écrit les observations dans SQLite et marque `missing` les fichiers qui ont disparu d’une racine entièrement lisible. Une racine produisant une erreur reste inchangée pour éviter de marquer à tort ses ROMs comme absentes.
 
+Le client egui peut déclencher ce même scan local en arrière-plan pour les comptes connectés `standard` et `admin`. Il lit les racines depuis `MONOLITH_LIBRARY_CONFIG` ou, par défaut, `config/backend.toml`; une absence de configuration masque l’action. Les comptes `read_only` et le mode hors ligne conservent uniquement la visualisation des états.
+
 La sortie contient les totaux `visités`, `acceptés`, `ignorés`, `absents` et `erreurs`. `library status` affiche le nombre de ROMs disponibles et absentes par système ; `--system-id` restreint ce tableau à un système.
 
 Le mot de passe n'est volontairement pas accepté en argument : cela évite son exposition dans l'historique shell et la liste des processus. La désactivation d'un compte révoque toutes ses sessions locales.

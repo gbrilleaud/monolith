@@ -1,8 +1,9 @@
 use crate::auth::AuthMode;
 use crate::client_auth::{AuthState, ClientAuth};
+use crate::client_inventory::{ClientInventory, InventoryRefreshState};
 use crate::cover::cover_uri;
 use crate::db::Database;
-use crate::models::{LaunchAvailability, UserOverride};
+use crate::models::{LaunchAvailability, ScanRoot, UserOverride};
 use crate::navigation::{AppView, Navigator};
 use crate::sync::SyncEngine;
 use eframe::egui;
@@ -22,6 +23,9 @@ pub struct MonolithApp {
     edit_cover: String,
     cover_picker: Option<Receiver<Option<PathBuf>>>,
     notice: Option<String>,
+    database_path: PathBuf,
+    library_roots: Vec<ScanRoot>,
+    inventory: Option<ClientInventory>,
     cache_path: PathBuf,
     username: String,
     password: String,
@@ -30,7 +34,13 @@ pub struct MonolithApp {
 }
 
 impl MonolithApp {
-    pub fn new(db: Database, auth: ClientAuth, cache_path: PathBuf) -> Self {
+    pub fn new(
+        db: Database,
+        auth: ClientAuth,
+        database_path: PathBuf,
+        library_roots: Vec<ScanRoot>,
+        cache_path: PathBuf,
+    ) -> Self {
         Self {
             db,
             auth,
@@ -41,6 +51,9 @@ impl MonolithApp {
             edit_cover: String::new(),
             cover_picker: None,
             notice: None,
+            database_path,
+            library_roots,
+            inventory: None,
             cache_path,
             username: String::new(),
             password: String::new(),
@@ -100,6 +113,51 @@ impl MonolithApp {
         }
     }
 
+    fn begin_inventory_scan(&mut self) {
+        let Some(user_id) = self.active_user_id() else {
+            return;
+        };
+        if !self.can_scan_library() {
+            self.notice =
+                Some("Le scan nécessite un compte standard ou administrateur connecté".into());
+            return;
+        }
+        if self.library_roots.is_empty() {
+            self.notice = Some("Aucune racine de bibliothèque n’est configurée localement".into());
+            return;
+        }
+        let mut inventory = ClientInventory::new(
+            &self.database_path,
+            self.library_roots.clone(),
+            user_id,
+            &self.cache_path,
+        );
+        match inventory.start() {
+            Ok(()) => {
+                self.inventory = Some(inventory);
+                self.notice = Some("Scan de la bibliothèque en cours…".into());
+            }
+            Err(error) => self.notice = Some(format!("Scan non lancé : {error}")),
+        }
+    }
+
+    fn poll_inventory_scan(&mut self) {
+        let Some(inventory) = &mut self.inventory else {
+            return;
+        };
+        if inventory.poll().is_none() {
+            return;
+        }
+        self.notice = Some(match inventory.state() {
+            InventoryRefreshState::Completed(report) => format!(
+                "Bibliothèque actualisée : {} acceptés, {} absents, {} erreurs",
+                report.accepted, report.missing, report.issues
+            ),
+            InventoryRefreshState::Error(error) => format!("Scan interrompu : {error}"),
+            InventoryRefreshState::Idle | InventoryRefreshState::Scanning => return,
+        });
+    }
+
     fn begin_cover_picker(&mut self) {
         if self.cover_picker.is_some() {
             return;
@@ -139,6 +197,7 @@ impl MonolithApp {
 impl eframe::App for MonolithApp {
     fn update(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_cover_picker();
+        self.poll_inventory_scan();
         self.auth.poll();
         if let Some(result) = self.auth.poll_override_sync() {
             self.notice = Some(match result {
@@ -156,7 +215,14 @@ impl eframe::App for MonolithApp {
             self.password.clear();
             self.bearer_token.clear();
         }
-        if self.cover_picker.is_some() || self.auth.override_sync_in_progress() {
+        let inventory_scanning = self
+            .inventory
+            .as_ref()
+            .is_some_and(|inventory| inventory.state().is_scanning());
+        if self.cover_picker.is_some()
+            || self.auth.override_sync_in_progress()
+            || inventory_scanning
+        {
             context.request_repaint_after(std::time::Duration::from_millis(100));
         }
 
@@ -185,6 +251,22 @@ impl eframe::App for MonolithApp {
                         logout = ui.button("Quitter le mode hors ligne").clicked();
                     }
                     _ => {}
+                }
+                if self.can_scan_library() {
+                    let scanning = self
+                        .inventory
+                        .as_ref()
+                        .is_some_and(|inventory| inventory.state().is_scanning());
+                    if ui
+                        .add_enabled(!scanning, egui::Button::new("Actualiser la bibliothèque"))
+                        .clicked()
+                    {
+                        self.begin_inventory_scan();
+                    }
+                    if scanning {
+                        ui.spinner();
+                        ui.label("Scan…");
+                    }
                 }
                 if self.auth.override_sync_in_progress() {
                     ui.spinner();
@@ -220,6 +302,10 @@ impl MonolithApp {
             AuthState::Offline { user_id } => Some(*user_id),
             _ => None,
         }
+    }
+
+    fn can_scan_library(&self) -> bool {
+        matches!(self.auth.state(), AuthState::Authenticated(session) if session.role.can_write())
     }
 
     fn can_edit(&self) -> bool {
