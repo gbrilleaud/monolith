@@ -72,6 +72,26 @@ fn cache_round_trip_preserves_resolved_catalog() {
 }
 
 #[test]
+fn importing_a_remote_catalog_snapshot_populates_local_consoles() {
+    let remote = Database::open_in_memory().unwrap();
+    remote.upsert_game(&sample_game()).unwrap();
+    let snapshot = remote.build_cache(42).unwrap();
+    let local = Database::open_in_memory().unwrap();
+
+    local.replace_catalog_snapshot(&snapshot).unwrap();
+
+    assert_eq!(
+        local.systems().unwrap(),
+        vec![monolith::models::SystemSummary {
+            system_id: 2,
+            name: "Dreamcast".into(),
+            game_count: 1,
+        }]
+    );
+    assert_eq!(local.resolved_games(42).unwrap()[0].title, "Rayman 2");
+}
+
+#[test]
 fn cache_exposes_launch_availability_from_linked_rom_locations() {
     let db = Database::open_in_memory().unwrap();
     db.upsert_game(&sample_game()).unwrap();

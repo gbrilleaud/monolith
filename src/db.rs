@@ -216,6 +216,30 @@ impl Database {
         Ok(())
     }
 
+    pub fn replace_catalog_snapshot(&self, snapshot: &CacheSnapshot) -> Result<()> {
+        let transaction = self.conn.unchecked_transaction()?;
+        for game in &snapshot.games {
+            transaction.execute(
+                "INSERT INTO games(game_id, system_id, system_name, title, description, cover_art, language)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                 ON CONFLICT(game_id) DO UPDATE SET
+                   system_id=excluded.system_id, system_name=excluded.system_name,
+                   title=excluded.title, description=excluded.description,
+                   cover_art=excluded.cover_art, language=excluded.language",
+                params![
+                    game.game_id,
+                    game.system_id,
+                    game.system_name,
+                    game.title,
+                    game.description,
+                    game.cover_art,
+                    game.language
+                ],
+            )?;
+        }
+        transaction.commit()
+    }
+
     pub fn save_override(&self, value: &UserOverride) -> Result<()> {
         self.conn.execute(
             "INSERT INTO user_overrides(user_id, game_id, description, cover_art, updated_at)

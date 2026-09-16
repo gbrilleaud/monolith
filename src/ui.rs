@@ -1,4 +1,5 @@
 use crate::auth::AuthMode;
+use crate::cache::load_cache;
 use crate::client_auth::{AuthState, ClientAuth};
 use crate::client_inventory::{ClientInventory, InventoryRefreshState};
 use crate::cover::cover_uri;
@@ -27,6 +28,7 @@ pub struct MonolithApp {
     library_roots: Vec<ScanRoot>,
     inventory: Option<ClientInventory>,
     cache_path: PathBuf,
+    imported_catalog_user_id: Option<i64>,
     username: String,
     password: String,
     bearer_token: String,
@@ -58,6 +60,7 @@ impl MonolithApp {
             library_roots,
             inventory: None,
             cache_path,
+            imported_catalog_user_id: None,
             username: String::new(),
             password: String::new(),
             bearer_token: String::new(),
@@ -65,6 +68,29 @@ impl MonolithApp {
             show_association_backoffice: false,
             association_search: String::new(),
             selected_rom_path: None,
+        }
+    }
+
+    fn import_remote_cache_for_active_user(&mut self) {
+        let Some(user_id) = self.active_user_id() else {
+            return;
+        };
+        if self.imported_catalog_user_id == Some(user_id) {
+            return;
+        }
+        self.imported_catalog_user_id = Some(user_id);
+        match load_cache(&self.cache_path) {
+            Ok(snapshot) if snapshot.user_id == user_id => {
+                if let Err(error) = self.db.replace_catalog_snapshot(&snapshot) {
+                    self.notice = Some(format!("Catalogue distant non importé : {error}"));
+                }
+            }
+            Ok(_) => {
+                self.notice = Some("Cache catalogue associé à un autre utilisateur".into());
+            }
+            Err(error) => {
+                self.notice = Some(format!("Cache catalogue indisponible : {error}"));
+            }
         }
     }
 
@@ -299,7 +325,11 @@ impl eframe::App for MonolithApp {
         self.poll_cover_picker();
         self.poll_inventory_scan();
         self.auth.poll();
+        self.import_remote_cache_for_active_user();
         if let Some(result) = self.auth.poll_override_sync() {
+            if result.is_ok() {
+                self.imported_catalog_user_id = None;
+            }
             self.notice = Some(match result {
                 Ok(()) => "Surcharge publiée sur le backend et cache synchronisé".into(),
                 Err(error) => format!(
@@ -384,6 +414,7 @@ impl eframe::App for MonolithApp {
             if let Err(error) = self.auth.logout() {
                 self.notice = Some(format!("Déconnexion incomplète : {error}"));
             }
+            self.imported_catalog_user_id = None;
             self.nav.home();
             return;
         }
