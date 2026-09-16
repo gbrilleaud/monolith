@@ -48,7 +48,15 @@ monolith-admin user add <nom> --role <read-only|standard|admin> --password-stdin
 monolith-admin user list
 monolith-admin user enable <id>
 monolith-admin user disable <id>
+monolith-admin library scan
+monolith-admin library status [--system-id <id>]
 ```
+
+### Inventaire des ROMs
+
+`library scan` lit toutes les racines `[[library.roots]]` configurées, sans déplacer, renommer ni supprimer de fichier. Il écrit les observations dans SQLite et marque `missing` les fichiers qui ont disparu d’une racine entièrement lisible. Une racine produisant une erreur reste inchangée pour éviter de marquer à tort ses ROMs comme absentes.
+
+La sortie contient les totaux `visités`, `acceptés`, `ignorés`, `absents` et `erreurs`. `library status` affiche le nombre de ROMs disponibles et absentes par système ; `--system-id` restreint ce tableau à un système.
 
 Le mot de passe n'est volontairement pas accepté en argument : cela évite son exposition dans l'historique shell et la liste des processus. La désactivation d'un compte révoque toutes ses sessions locales.
 

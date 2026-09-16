@@ -5,6 +5,7 @@ use monolith::{
     backend::BackendState,
     backend_config::BackendConfig,
     db::Database,
+    inventory::scan_root,
 };
 use std::{io::Read, path::PathBuf};
 
@@ -35,6 +36,10 @@ enum Command {
         #[command(subcommand)]
         command: UserCommand,
     },
+    Library {
+        #[command(subcommand)]
+        command: LibraryCommand,
+    },
 }
 
 #[derive(Subcommand)]
@@ -64,6 +69,15 @@ enum AuthCommand {
 }
 
 #[derive(Subcommand)]
+enum LibraryCommand {
+    Scan,
+    Status {
+        #[arg(long)]
+        system_id: Option<i64>,
+    },
+}
+
+#[derive(Subcommand)]
 enum UserCommand {
     Add {
         username: String,
@@ -87,6 +101,7 @@ fn main() -> Result<()> {
         Command::Config { command } => run_config(command, &cli.config),
         Command::Auth { command } => run_auth(command, &cli.config),
         Command::User { command } => run_user(command, &cli.config),
+        Command::Library { command } => run_library(command, &cli.config),
     }
 }
 
@@ -131,6 +146,57 @@ fn run_auth(command: AuthCommand, path: &std::path::Path) -> Result<()> {
             config.auth.oidc.auto_provision = auto_provision;
             config.save(path)?;
             println!("Mode d'authentification : {:?}", mode);
+        }
+    }
+    Ok(())
+}
+
+fn run_library(command: LibraryCommand, config_path: &std::path::Path) -> Result<()> {
+    let config = BackendConfig::load(config_path)?;
+    let directory = config_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
+    let state = BackendState::new(config, directory)?;
+    let database = Database::open(&state.database_path)?;
+
+    match command {
+        LibraryCommand::Scan => {
+            let mut visited = 0;
+            let mut accepted = 0;
+            let mut ignored = 0;
+            let mut missing = 0;
+            let mut issues = 0;
+
+            for root in &state.config.library.roots {
+                let report = scan_root(root)?;
+                visited += report.visited;
+                accepted += report.accepted;
+                ignored += report.ignored;
+                issues += report.issues.len();
+                if report.issues.is_empty() {
+                    missing += database.sync_rom_inventory(root, &report.observations)?;
+                }
+            }
+            println!(
+                "Scan terminé : visités={visited} acceptés={accepted} ignorés={ignored} absents={missing} erreurs={issues}"
+            );
+        }
+        LibraryCommand::Status { system_id } => {
+            println!("SYSTEM_ID\tDISPONIBLES\tABSENTS");
+            let mut counts = std::collections::BTreeMap::<i64, (usize, usize)>::new();
+            for location in database.rom_locations()? {
+                if system_id.is_some_and(|id| id != location.system_id) {
+                    continue;
+                }
+                let count = counts.entry(location.system_id).or_default();
+                match location.availability {
+                    monolith::models::RomAvailability::Available => count.0 += 1,
+                    monolith::models::RomAvailability::Missing => count.1 += 1,
+                }
+            }
+            for (id, (available, missing)) in counts {
+                println!("{id}\t{available}\t{missing}");
+            }
         }
     }
     Ok(())
