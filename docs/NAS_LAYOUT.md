@@ -4,6 +4,8 @@ Cette disposition est un exemple local. Elle ne doit pas être publiée avec les
 
 ```text
 <stockage-privé>/
+├── bios/
+│   └── <plateforme>/
 ├── roms/
 │   └── sega_genesis/
 ├── pc-games/
@@ -19,6 +21,12 @@ Cette disposition est un exemple local. Elle ne doit pas être publiée avec les
 └── emulators/
     └── manifests/
 ```
+
+## BIOS et firmware privés
+
+Le répertoire `bios/` est une bibliothèque de référence privée de l'administrateur de l'instance. Il peut être utilisé par le serveur pour provisionner un appareil client explicitement autorisé lors de l'installation. Il reste exclu de Git, des releases et de toute exposition publique.
+
+Chaque appareil conserve sa copie validée dans son répertoire de données local. Le serveur transmet uniquement les fichiers nécessaires à la plateforme demandée, via un canal authentifié, puis le client vérifie taille et SHA-256. Une installation tierce de Monolith crée la structure sans y inclure de BIOS ; son administrateur doit la remplir avec ses propres dumps.
 
 ## ROMs
 

@@ -34,9 +34,11 @@ L'utilisateur reste responsable de respecter les licences applicables. Une absen
 
 ## BIOS et firmware
 
-Monolith peut déclarer qu'une plateforme nécessite un BIOS et en valider le nom, la taille ou l'empreinte. Il ne télécharge, ne fournit, ne récupère ni ne redistribue le fichier.
+Monolith peut déclarer qu'une plateforme nécessite un BIOS et en valider le nom, la taille ou l'empreinte. Le projet public ne télécharge, ne fournit, ne récupère ni ne redistribue ces fichiers.
 
-L'utilisateur doit créer ses propres dumps légalement depuis son matériel ou ses médias. Les BIOS typiquement concernés incluent notamment PlayStation, Saturn, Mega-CD, Dreamcast et certains fichiers système Nintendo. Les cartouches Mega Drive / Genesis ordinaires lancées avec Genesis Plus GX ne requièrent normalement pas de BIOS externe.
+L'administrateur d'une instance privée peut conserver ses propres dumps légalement créés sur son NAS privé et les déployer uniquement vers les appareils qu'il a autorisés dans son réseau privé. Les BIOS restent exclus du dépôt, des releases, des artefacts CI et de toute interface ou URL publique. Une instance installée par un tiers garde le répertoire BIOS vide jusqu'à ce que son propre administrateur le remplisse avec ses propres dumps.
+
+Les BIOS typiquement concernés incluent notamment PlayStation, Saturn, Mega-CD, Dreamcast et certains fichiers système Nintendo. Les cartouches Mega Drive / Genesis ordinaires lancées avec Genesis Plus GX ne requièrent normalement pas de BIOS externe.
 
 ## Checklist avant publication GitHub
 

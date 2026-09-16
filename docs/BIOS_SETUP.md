@@ -2,9 +2,11 @@
 
 ## Politique
 
-Monolith ne télécharge, ne fournit, ne récupère et ne redistribue aucun BIOS, firmware, clé de console, NAND, IPL ou fichier système propriétaire.
+Monolith ne télécharge, ne fournit, ne récupère et ne redistribue publiquement aucun BIOS, firmware, clé de console, NAND, IPL ou fichier système propriétaire.
 
-Le logiciel peut uniquement signaler qu'un fichier est requis et, si l'utilisateur l'a fourni localement, contrôler son nom, sa taille et son empreinte. Les fichiers doivent provenir de dumps légalement créés depuis le matériel ou les médias de l'utilisateur.
+Une instance auto-hébergée peut conserver les dumps que son administrateur a créés légalement dans son stockage NAS privé. Elle peut les provisionner vers les seuls appareils explicitement autorisés du même réseau privé lors de leur installation. Cette copie privée ne doit jamais être exposée par une URL publique, incluse dans une release, déposée dans GitHub, transmise à un utilisateur non autorisé, ni servir de contenu de démonstration.
+
+Le logiciel peut contrôler le nom, la taille et l'empreinte des fichiers. Les fichiers doivent provenir de dumps légalement créés depuis le matériel ou les médias de l'administrateur de l'instance.
 
 ## État des plateformes actuellement prévues
 
@@ -20,16 +22,25 @@ Le logiciel peut uniquement signaler qu'un fichier est requis et, si l'utilisate
 | GameCube / Wii, si ajoutées | Dolphin | IPL, NAND, clés et fichiers système selon les usages | hors périmètre actuel |
 | Switch, hors périmètre | aucun | `prod.keys`, `title.keys`, firmware, NAND | jamais distribué par Monolith |
 
-## Règle de validation
+## Stockage serveur privé et déploiement client
 
-Une plateforme qui nécessite un BIOS n'est pas considérée comme prête à lancer tant que le client n'a pas validé localement le fichier requis. Une validation réussie ne transfère jamais ce fichier au backend ni au NAS partagé.
+Une instance personnelle peut conserver un exemplaire de référence sur son NAS privé, hors du dépôt :
 
-## Disposition locale recommandée
+```text
+<stockage-privé>/bios/
+├── sega_saturn/
+├── sega_dreamcast/
+├── nintendo_game_boy_advance/
+├── sony_playstation/
+└── nintendo_gamecube/
+```
 
-Les fichiers privés restent dans un emplacement local exclu de Git, par exemple :
+Le serveur ne doit proposer ce contenu qu'après authentification et autorisation explicite d'un appareil appartenant à l'instance. Le transfert doit utiliser un canal authentifié, enregistrer un audit non sensible et vérifier l'empreinte après copie. Le client installe ensuite les fichiers dans son répertoire de données local, par exemple :
 
 ```text
 <répertoire-de-données-client>/firmware/<plateforme>/
 ```
 
-Le chemin et l'empreinte peuvent être référencés dans une configuration locale non versionnée. Ne jamais placer ces fichiers sous `src/`, `tests/`, `docs/`, `config/` ou une release publique.
+Une plateforme qui nécessite un BIOS n'est considérée comme prête à lancer qu'après validation locale du nom, de la taille et de l'empreinte du fichier provisionné. Une instance distribuée à un tiers possède la même arborescence logique, mais son répertoire `bios/` est vide : son administrateur doit y ajouter ses propres dumps.
+
+Ne jamais placer ces fichiers sous `src/`, `tests/`, `docs/`, `config/`, dans une release publique ou dans Git.

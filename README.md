@@ -86,7 +86,7 @@ La table `user_overrides` est indexée par `(user_id, game_id)`. Les champs non 
 
 ## Contenu utilisateur et publication GitHub
 
-Monolith ne fournit ni ROM, ni BIOS, ni firmware, ni clé, ni installateur commercial. Les contenus privés de l'utilisateur doivent rester hors du dépôt et hors des releases publiques. Chaque utilisateur doit fournir les contenus qu'il possède légalement et vérifier les conditions de licence applicables.
+Monolith ne fournit publiquement ni ROM, ni BIOS, ni firmware, ni clé, ni installateur commercial. Les contenus privés de l'utilisateur restent hors du dépôt et des releases publiques. Une instance auto-hébergée peut provisionner ses propres BIOS depuis son NAS privé vers ses appareils explicitement autorisés ; chaque instance tierce doit fournir ses propres dumps et vérifier les conditions de licence applicables.
 
 La politique et la checklist de publication sont dans [`docs/LEGAL_CONTENT.md`](docs/LEGAL_CONTENT.md). Les exigences BIOS sont dans [`docs/BIOS_SETUP.md`](docs/BIOS_SETUP.md), et le flux privé ROMs/paquets GOG est décrit dans [`docs/NAS_LAYOUT.md`](docs/NAS_LAYOUT.md).
 
