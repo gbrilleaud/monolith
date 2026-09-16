@@ -1,4 +1,6 @@
 /target
+
+# Runtime state and local configuration
 *.db
 *.db-shm
 *.db-wal
@@ -6,3 +8,17 @@ monolith_cache_data.json
 session.json
 .env
 /config/backend.toml
+/data/
+
+# Private user-owned content: never commit or publish
+/roms/
+/bios/
+/firmware/
+/keys/
+/saves/
+/pc-games/
+/installers/
+/installed-games/
+
+# Graft regenerable local code graph
+graft/
