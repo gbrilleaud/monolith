@@ -1,6 +1,6 @@
 use monolith::{
-    models::{GameMetadata, LaunchAvailability},
-    ui::association_candidates,
+    models::{GameMetadata, LaunchAvailability, RomAvailability, RomLocation},
+    ui::{association_candidates, linked_locations_for_game},
 };
 
 fn game(game_id: i64, system_id: i64, title: &str) -> GameMetadata {
@@ -14,6 +14,36 @@ fn game(game_id: i64, system_id: i64, title: &str) -> GameMetadata {
         language: "fr".into(),
         launch_availability: LaunchAvailability::default(),
     }
+}
+
+fn location(path: &str, game_id: Option<i64>) -> RomLocation {
+    RomLocation {
+        id: None,
+        game_id,
+        system_id: 42,
+        path: path.into(),
+        extension: "iso".into(),
+        size_bytes: 1,
+        modified_at: None,
+        sha256: None,
+        availability: RomAvailability::Available,
+        last_seen_at: String::new(),
+    }
+}
+
+#[test]
+fn linked_locations_for_game_returns_only_selected_games_paths() {
+    let linked = linked_locations_for_game(
+        vec![
+            location("/roms/tekken.iso", Some(7)),
+            location("/roms/rayman.iso", Some(8)),
+            location("/roms/unlinked.iso", None),
+        ],
+        7,
+    );
+
+    assert_eq!(linked.len(), 1);
+    assert_eq!(linked[0].path, "/roms/tekken.iso");
 }
 
 #[test]

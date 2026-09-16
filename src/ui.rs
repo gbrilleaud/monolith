@@ -608,6 +608,53 @@ impl MonolithApp {
                 ui.heading(&game.title);
                 ui.label(format!("{} · langue {}", game.system_name, game.language));
                 render_availability(ui, &game.launch_availability);
+                if self.can_manage_associations() {
+                    ui.separator();
+                    ui.label("ROMs associées");
+                    match self.db.rom_locations() {
+                        Ok(locations) => {
+                            let linked = linked_locations_for_game(locations, game_id);
+                            if linked.is_empty() {
+                                ui.label("Aucune ROM associée.");
+                            } else {
+                                let mut unlink_path = None;
+                                for location in linked {
+                                    ui.horizontal(|ui| {
+                                        ui.label(format!(
+                                            "{} · {:?}",
+                                            location.path, location.availability
+                                        ));
+                                        if ui.button("Désassocier").clicked() {
+                                            unlink_path = Some(location.path.clone());
+                                        }
+                                    });
+                                }
+                                if let Some(path) = unlink_path {
+                                    match self.db.unlink_rom_location(&path) {
+                                        Ok(()) => match self.refresh_cache_for_active_user() {
+                                            Ok(()) => {
+                                                self.notice =
+                                                    Some("Association ROM supprimée".into());
+                                            }
+                                            Err(error) => {
+                                                self.notice = Some(format!(
+                                                    "Association supprimée, cache non actualisé : {error}"
+                                                ));
+                                            }
+                                        },
+                                        Err(error) => {
+                                            self.notice =
+                                                Some(format!("Désassociation refusée : {error}"));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            ui.colored_label(egui::Color32::RED, format!("SQLite : {error}"));
+                        }
+                    }
+                }
                 ui.separator();
                 render_cover(ui, game.cover_art.as_deref(), egui::vec2(240.0, 320.0));
                 ui.add_space(8.0);
@@ -676,6 +723,16 @@ impl MonolithApp {
             }
         }
     }
+}
+
+pub fn linked_locations_for_game(
+    locations: Vec<crate::models::RomLocation>,
+    game_id: i64,
+) -> Vec<crate::models::RomLocation> {
+    locations
+        .into_iter()
+        .filter(|location| location.game_id == Some(game_id))
+        .collect()
 }
 
 pub fn association_candidates(
