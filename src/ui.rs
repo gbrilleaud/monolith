@@ -2,7 +2,7 @@ use crate::auth::AuthMode;
 use crate::client_auth::{AuthState, ClientAuth};
 use crate::cover::cover_uri;
 use crate::db::Database;
-use crate::models::UserOverride;
+use crate::models::{LaunchAvailability, UserOverride};
 use crate::navigation::{AppView, Navigator};
 use crate::sync::SyncEngine;
 use eframe::egui;
@@ -390,6 +390,7 @@ impl MonolithApp {
                                 open |= ui
                                     .add_sized([168.0, 38.0], egui::Button::new(&game.title))
                                     .clicked();
+                                render_availability(ui, &game.launch_availability);
                             });
                             if open {
                                 self.nav.open_details(game.game_id);
@@ -412,6 +413,7 @@ impl MonolithApp {
             Ok(Some(game)) => {
                 ui.heading(&game.title);
                 ui.label(format!("{} · langue {}", game.system_name, game.language));
+                render_availability(ui, &game.launch_availability);
                 ui.separator();
                 render_cover(ui, game.cover_art.as_deref(), egui::vec2(240.0, 320.0));
                 ui.add_space(8.0);
@@ -480,6 +482,31 @@ impl MonolithApp {
             }
         }
     }
+}
+
+pub fn availability_label(availability: &LaunchAvailability) -> String {
+    if availability.available {
+        format!(
+            "Disponible · {} emplacement{}",
+            availability.location_count,
+            if availability.location_count > 1 {
+                "s"
+            } else {
+                ""
+            }
+        )
+    } else {
+        "Absent de la bibliothèque".into()
+    }
+}
+
+fn render_availability(ui: &mut egui::Ui, availability: &LaunchAvailability) {
+    let color = if availability.available {
+        egui::Color32::LIGHT_GREEN
+    } else {
+        egui::Color32::LIGHT_RED
+    };
+    ui.colored_label(color, availability_label(availability));
 }
 
 fn non_empty(value: &str) -> Option<String> {
