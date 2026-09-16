@@ -138,12 +138,58 @@ impl Database {
         Ok(missing)
     }
 
-    pub fn assign_rom_location_to_game(&self, path: &str, game_id: i64) -> Result<()> {
+    pub fn link_rom_location_to_game(&self, path: &str, game_id: i64) -> AnyResult<()> {
+        let location_system_id: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT system_id FROM rom_locations WHERE path=?1",
+                [path],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let location_system_id =
+            location_system_id.ok_or_else(|| anyhow!("ROM introuvable : {path}"))?;
+        let game_system_id: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT system_id FROM games WHERE game_id=?1",
+                [game_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let game_system_id =
+            game_system_id.ok_or_else(|| anyhow!("jeu introuvable : {game_id}"))?;
+        if location_system_id != game_system_id {
+            bail!(
+                "association refusée : ROM (système {location_system_id}) et jeu (système {game_system_id}) appartiennent à des systèmes différents"
+            );
+        }
         self.conn.execute(
             "UPDATE rom_locations SET game_id=?1 WHERE path=?2",
             params![game_id, path],
         )?;
         Ok(())
+    }
+
+    pub fn unlink_rom_location(&self, path: &str) -> AnyResult<()> {
+        let changed = self.conn.execute(
+            "UPDATE rom_locations SET game_id=NULL WHERE path=?1 AND game_id IS NOT NULL",
+            [path],
+        )?;
+        if changed == 0 {
+            bail!("association introuvable pour la ROM : {path}");
+        }
+        Ok(())
+    }
+
+    pub fn unlinked_rom_locations(&self) -> Result<Vec<RomLocation>> {
+        let mut statement = self.conn.prepare(
+            "SELECT id, game_id, system_id, path, extension, size_bytes, modified_at, sha256,
+                    availability, last_seen_at
+             FROM rom_locations WHERE game_id IS NULL ORDER BY system_id, path",
+        )?;
+        let locations = statement.query_map([], map_rom_location)?.collect();
+        locations
     }
 
     pub fn rom_locations(&self) -> Result<Vec<RomLocation>> {

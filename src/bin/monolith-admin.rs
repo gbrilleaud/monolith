@@ -75,6 +75,14 @@ enum LibraryCommand {
         #[arg(long)]
         system_id: Option<i64>,
     },
+    Unlinked,
+    Link {
+        rom_path: String,
+        game_id: i64,
+    },
+    Unlink {
+        rom_path: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -197,6 +205,27 @@ fn run_library(command: LibraryCommand, config_path: &std::path::Path) -> Result
             for (id, (available, missing)) in counts {
                 println!("{id}\t{available}\t{missing}");
             }
+        }
+        LibraryCommand::Unlinked => {
+            println!("SYSTEM_ID\tÉTAT\tTAILLE\tEXTENSION\tCHEMIN");
+            for location in database.unlinked_rom_locations()? {
+                println!(
+                    "{}\t{:?}\t{}\t{}\t{}",
+                    location.system_id,
+                    location.availability,
+                    location.size_bytes,
+                    location.extension,
+                    location.path
+                );
+            }
+        }
+        LibraryCommand::Link { rom_path, game_id } => {
+            database.link_rom_location_to_game(&rom_path, game_id)?;
+            println!("ROM associée au jeu {game_id} : {rom_path}");
+        }
+        LibraryCommand::Unlink { rom_path } => {
+            database.unlink_rom_location(&rom_path)?;
+            println!("Association supprimée : {rom_path}");
         }
     }
     Ok(())

@@ -1,9 +1,7 @@
 use monolith::{
     cache::{load_cache, write_cache_atomic},
     db::Database,
-    models::{
-        GameMetadata, LaunchAvailability, ScanObservation, ScanRoot, UserOverride,
-    },
+    models::{GameMetadata, LaunchAvailability, ScanObservation, ScanRoot, UserOverride},
     navigation::{AppView, Navigator},
     sync::SyncEngine,
 };
@@ -94,7 +92,7 @@ fn cache_exposes_launch_availability_from_linked_rom_locations() {
         }],
     )
     .unwrap();
-    db.assign_rom_location_to_game(path, 7).unwrap();
+    db.link_rom_location_to_game(path, 7).unwrap();
 
     let snapshot = db.build_cache(42).unwrap();
     assert_eq!(
