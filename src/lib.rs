@@ -12,6 +12,7 @@ pub mod cover;
 pub mod db;
 pub mod emulator_launcher;
 pub mod inventory;
+pub mod local_rom;
 pub mod models;
 pub mod navigation;
 pub mod session_store;

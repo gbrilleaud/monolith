@@ -7,6 +7,7 @@ use crate::client_rom_upload::{ClientRomUpload, RomUploadState};
 use crate::cover::cover_uri;
 use crate::db::Database;
 use crate::emulator_launcher::EmulatorLauncher;
+use crate::local_rom::launch_local_rom;
 use crate::models::{GameMetadata, LaunchAvailability, ScanRoot, UserOverride};
 use crate::navigation::{AppView, Navigator};
 use crate::sync::SyncEngine;
@@ -813,6 +814,31 @@ impl MonolithApp {
                             if open {
                                 self.nav.open_details(game.game_id);
                             }
+                        }
+                        let local_roms = self
+                            .db
+                            .unlinked_rom_locations()
+                            .unwrap_or_default()
+                            .into_iter()
+                            .filter(|location| location.system_id == system_id);
+                        for location in local_roms {
+                            ui.group(|ui| {
+                                ui.set_width(180.0);
+                                ui.label(egui::RichText::new("ROM locale inconnue").strong());
+                                ui.label(&location.path);
+                                ui.label(format!(
+                                    "{} · {} octets",
+                                    location.extension, location.size_bytes
+                                ));
+                                if ui.button("Lancer localement").clicked() {
+                                    if let Err(error) =
+                                        launch_local_rom(&self.emulator_launcher, &location)
+                                    {
+                                        self.notice =
+                                            Some(format!("Lancement local refusé : {error}"));
+                                    }
+                                }
+                            });
                         }
                     });
                 });
