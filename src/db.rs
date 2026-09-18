@@ -9,6 +9,7 @@ use crate::models::{
 use anyhow::{anyhow, bail, Result as AnyResult};
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension, Result};
+use sha2::Digest;
 use std::path::Path;
 
 pub struct Database {
@@ -215,6 +216,24 @@ impl Database {
         )?;
         let locations = statement.query_map([], map_rom_location)?.collect();
         locations
+    }
+
+    pub fn register_local_rom(&self, system_id: i64, path: &Path) -> AnyResult<()> {
+        if system_id <= 0 {
+            bail!("system_id doit être positif");
+        }
+        let metadata = std::fs::metadata(path)
+            .map_err(|error| anyhow!("ROM locale inaccessible {} : {error}", path.display()))?;
+        if !metadata.is_file() {
+            bail!("la ROM locale doit être un fichier : {}", path.display());
+        }
+        let bytes = std::fs::read(path)
+            .map_err(|error| anyhow!("lecture ROM locale {} : {error}", path.display()))?;
+        if bytes.is_empty() {
+            bail!("la ROM locale est vide : {}", path.display());
+        }
+        let sha256 = format!("{:x}", sha2::Sha256::digest(&bytes));
+        self.record_published_rom(system_id, path, metadata.len(), &sha256)
     }
 
     pub fn record_published_rom(

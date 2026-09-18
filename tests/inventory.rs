@@ -227,3 +227,27 @@ fn database_marks_unseen_locations_missing_only_within_the_scanned_root() {
         RomAvailability::Available
     );
 }
+
+#[test]
+fn locally_added_unknown_rom_is_available_unlinked_and_hashed_without_a_server() {
+    let directory = tempfile::tempdir().unwrap();
+    let source = directory.path().join("Rayman 2.iso");
+    std::fs::write(&source, b"offline-rom").unwrap();
+    let database = Database::open_in_memory().unwrap();
+
+    database.register_local_rom(77, &source).unwrap();
+
+    let locations = database.unlinked_rom_locations().unwrap();
+    assert_eq!(locations.len(), 1);
+    let location = &locations[0];
+    assert_eq!(location.system_id, 77);
+    assert_eq!(location.path, source.display().to_string());
+    assert_eq!(location.extension, "iso");
+    assert_eq!(location.size_bytes, 11);
+    assert_eq!(location.availability, RomAvailability::Available);
+    assert_eq!(
+        location.sha256.as_deref(),
+        Some("6d2e70717da29fdc96a94434ff8557f9e239c3b12936ae7f8e29dfed105d7bd4")
+    );
+    assert!(location.game_id.is_none());
+}
