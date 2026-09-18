@@ -5,8 +5,8 @@ use crate::{
     models::{CacheSnapshot, UserOverride},
 };
 use axum::{
-    body::Body,
-    extract::{Path, State},
+    body::{to_bytes, Body},
+    extract::{Path, Query, State},
     http::{header::AUTHORIZATION, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post, put},
@@ -54,6 +54,7 @@ pub fn router(state: BackendState) -> Router {
         .route("/api/v1/auth/me", get(identity))
         .route("/api/v1/catalog", get(catalog))
         .route("/api/v1/games/:game_id/rom", get(download_game_rom))
+        .route("/api/v1/library/uploads", post(upload_rom))
         .route(
             "/api/v1/users/:user_id/overrides/:game_id",
             put(save_override),
@@ -196,6 +197,134 @@ async fn download_game_rom(
         HeaderValue::from_str(&sha256).map_err(ApiError::internal)?,
     );
     Ok(response)
+}
+
+#[derive(Debug, Deserialize)]
+struct UploadQuery {
+    system_id: i64,
+}
+
+#[derive(Debug, Serialize)]
+struct UploadResponse {
+    upload_id: String,
+    file_name: String,
+    size_bytes: u64,
+    sha256: String,
+}
+
+const MAX_ROM_UPLOAD_BYTES: usize = 8 * 1024 * 1024 * 1024;
+
+async fn upload_rom(
+    State(state): State<BackendState>,
+    headers: HeaderMap,
+    Query(query): Query<UploadQuery>,
+    body: Body,
+) -> Result<(StatusCode, Json<UploadResponse>), ApiError> {
+    let principal = authenticate(&state, &headers).await?;
+    if !principal.role.can_write() {
+        return Err(ApiError::new(StatusCode::FORBIDDEN, "rom_upload_forbidden"));
+    }
+    if query.system_id <= 0 {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, "invalid_system_id"));
+    }
+    let file_name = headers
+        .get("x-monolith-file-name")
+        .and_then(|value| value.to_str().ok())
+        .filter(|value| {
+            !value.is_empty()
+                && !value.contains(['/', '\\', '\r', '\n'])
+                && std::path::Path::new(value)
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name == *value)
+        })
+        .ok_or_else(|| ApiError::new(StatusCode::BAD_REQUEST, "invalid_rom_file_name"))?
+        .to_owned();
+    let extension = std::path::Path::new(&file_name)
+        .extension()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| ApiError::new(StatusCode::BAD_REQUEST, "missing_rom_extension"))?
+        .to_ascii_lowercase();
+    let root = state
+        .config
+        .library
+        .roots
+        .iter()
+        .find(|root| root.system_id == query.system_id)
+        .ok_or_else(|| ApiError::new(StatusCode::BAD_REQUEST, "upload_system_not_configured"))?;
+    if !root.extensions.iter().any(|allowed| allowed == &extension) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "rom_extension_not_allowed",
+        ));
+    }
+    let bytes = to_bytes(body, MAX_ROM_UPLOAD_BYTES)
+        .await
+        .map_err(|_| ApiError::new(StatusCode::PAYLOAD_TOO_LARGE, "rom_upload_too_large"))?;
+    if bytes.is_empty() {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, "empty_rom_upload"));
+    }
+    let sha256 = format!("{:x}", Sha256::digest(&bytes));
+    if state
+        .database()?
+        .has_available_rom_sha256(&sha256)
+        .map_err(ApiError::internal)?
+        || inbox_contains_sha256(&state.config.library.upload_root, &sha256)
+            .map_err(ApiError::internal)?
+    {
+        return Err(ApiError::new(StatusCode::CONFLICT, "rom_duplicate"));
+    }
+
+    let upload_id = uuid::Uuid::new_v4().to_string();
+    let directory = PathBuf::from(&state.config.library.upload_root).join(&upload_id);
+    std::fs::create_dir_all(&directory).map_err(ApiError::internal)?;
+    let destination = directory.join(&file_name);
+    let partial = directory.join(format!(".{file_name}.partial"));
+    if let Err(error) =
+        std::fs::write(&partial, &bytes).and_then(|_| std::fs::rename(&partial, &destination))
+    {
+        let _ = std::fs::remove_file(&partial);
+        let _ = std::fs::remove_dir(&directory);
+        return Err(ApiError::internal(error));
+    }
+    Ok((
+        StatusCode::CREATED,
+        Json(UploadResponse {
+            upload_id,
+            file_name,
+            size_bytes: bytes.len() as u64,
+            sha256,
+        }),
+    ))
+}
+
+fn inbox_contains_sha256(root: &str, expected: &str) -> std::io::Result<bool> {
+    let root = std::path::Path::new(root);
+    if !root.exists() {
+        return Ok(false);
+    }
+    for directory in std::fs::read_dir(root)? {
+        let directory = directory?.path();
+        if !directory.is_dir() {
+            continue;
+        }
+        for entry in std::fs::read_dir(directory)? {
+            let path = entry?.path();
+            if !path.is_file()
+                || path
+                    .extension()
+                    .is_some_and(|extension| extension == "partial")
+            {
+                continue;
+            }
+            let bytes = std::fs::read(path)?;
+            if format!("{:x}", Sha256::digest(&bytes)) == expected {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
 }
 
 async fn save_override(

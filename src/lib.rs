@@ -6,6 +6,7 @@ pub mod cache;
 pub mod client_auth;
 pub mod client_inventory;
 pub mod client_rom_download;
+pub mod client_rom_upload;
 pub mod cover;
 pub mod db;
 pub mod emulator_launcher;

@@ -3,6 +3,7 @@ use crate::cache::load_cache;
 use crate::client_auth::{AuthState, ClientAuth};
 use crate::client_inventory::{ClientInventory, InventoryRefreshState};
 use crate::client_rom_download::{ClientRomDownload, RomDownloadState};
+use crate::client_rom_upload::{ClientRomUpload, RomUploadState};
 use crate::cover::cover_uri;
 use crate::db::Database;
 use crate::emulator_launcher::EmulatorLauncher;
@@ -32,6 +33,9 @@ pub struct MonolithApp {
     inventory: Option<ClientInventory>,
     rom_download: ClientRomDownload,
     downloading_game_id: Option<i64>,
+    rom_upload: ClientRomUpload,
+    rom_upload_picker: Option<Receiver<Option<PathBuf>>>,
+    rom_upload_system_id: Option<i64>,
     cache_path: PathBuf,
     imported_catalog_user_id: Option<i64>,
     username: String,
@@ -68,6 +72,9 @@ impl MonolithApp {
             inventory: None,
             rom_download: ClientRomDownload::new(),
             downloading_game_id: None,
+            rom_upload: ClientRomUpload::new(),
+            rom_upload_picker: None,
+            rom_upload_system_id: None,
             cache_path,
             imported_catalog_user_id: None,
             username: String::new(),
@@ -125,6 +132,90 @@ impl MonolithApp {
             .map_err(|error| error.to_string())?;
         self.downloading_game_id = Some(game.game_id);
         Ok(())
+    }
+
+    fn begin_rom_upload_picker(&mut self, system_id: i64) {
+        if !self.can_scan_library() {
+            self.notice =
+                Some("L’import nécessite un compte standard ou administrateur connecté".into());
+            return;
+        }
+        if self.rom_upload_picker.is_some()
+            || matches!(self.rom_upload.state(), RomUploadState::Uploading)
+        {
+            return;
+        }
+        let (sender, receiver) = mpsc::channel();
+        thread::spawn(move || {
+            let selection = rfd::FileDialog::new()
+                .set_title("Importer une ROM")
+                .pick_file();
+            let _ = sender.send(selection);
+        });
+        self.rom_upload_system_id = Some(system_id);
+        self.rom_upload_picker = Some(receiver);
+    }
+
+    fn poll_rom_upload_picker(&mut self) {
+        let Some(receiver) = &self.rom_upload_picker else {
+            return;
+        };
+        let selection = match receiver.try_recv() {
+            Ok(selection) => selection,
+            Err(TryRecvError::Disconnected) => {
+                self.notice = Some("Le sélecteur de ROM s’est interrompu".into());
+                self.rom_upload_picker = None;
+                self.rom_upload_system_id = None;
+                return;
+            }
+            Err(TryRecvError::Empty) => return,
+        };
+        self.rom_upload_picker = None;
+        let Some(source) = selection else {
+            self.rom_upload_system_id = None;
+            return;
+        };
+        let result = self
+            .auth
+            .authenticated_session()
+            .ok_or_else(|| "connexion au backend requise".to_owned())
+            .and_then(|session| {
+                let system_id = self
+                    .rom_upload_system_id
+                    .take()
+                    .ok_or_else(|| "console d’import absente".to_owned())?;
+                self.rom_upload
+                    .start(
+                        session.backend_url.clone(),
+                        session.access_token.clone(),
+                        system_id,
+                        source,
+                    )
+                    .map_err(|error| error.to_string())
+            });
+        if let Err(error) = result {
+            self.notice = Some(format!("Import ROM refusé : {error}"));
+        } else {
+            self.notice = Some("Import ROM et vérification SHA-256 en cours…".into());
+        }
+    }
+
+    fn poll_rom_upload(&mut self) {
+        let Some(state) = self.rom_upload.poll().cloned() else {
+            return;
+        };
+        match state {
+            RomUploadState::Completed(upload) => {
+                self.notice = Some(format!(
+                    "ROM reçue dans l’inbox : {} · SHA-256 {}",
+                    upload.file_name, upload.sha256
+                ))
+            }
+            RomUploadState::Error(error) => {
+                self.notice = Some(format!("Import ROM échoué : {error}"))
+            }
+            _ => {}
+        }
     }
 
     fn launch_game(&mut self, game: &GameMetadata) -> Result<(), String> {
@@ -406,6 +497,8 @@ impl MonolithApp {
 impl eframe::App for MonolithApp {
     fn update(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_cover_picker();
+        self.poll_rom_upload_picker();
+        self.poll_rom_upload();
         self.poll_inventory_scan();
         self.poll_rom_download();
         self.auth.poll();
@@ -434,6 +527,8 @@ impl eframe::App for MonolithApp {
             .as_ref()
             .is_some_and(|inventory| inventory.state().is_scanning());
         if self.cover_picker.is_some()
+            || self.rom_upload_picker.is_some()
+            || matches!(self.rom_upload.state(), RomUploadState::Uploading)
             || self.auth.override_sync_in_progress()
             || inventory_scanning
         {
@@ -673,6 +768,20 @@ impl MonolithApp {
         ui.horizontal(|ui| {
             ui.heading("Catalogue");
             ui.add(egui::TextEdit::singleline(&mut self.search).hint_text("Rechercher…"));
+            let uploading = matches!(self.rom_upload.state(), RomUploadState::Uploading);
+            if ui
+                .add_enabled(
+                    self.can_scan_library() && !uploading && self.rom_upload_picker.is_none(),
+                    egui::Button::new("Importer une ROM"),
+                )
+                .clicked()
+            {
+                self.begin_rom_upload_picker(system_id);
+            }
+            if uploading {
+                ui.spinner();
+                ui.label("Import…");
+            }
         });
         let needle = self.search.to_lowercase();
         let Some(user_id) = self.active_user_id() else {

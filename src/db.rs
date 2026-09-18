@@ -85,6 +85,19 @@ impl Database {
         )
     }
 
+    pub fn has_available_rom_sha256(&self, sha256: &str) -> Result<bool> {
+        self.conn
+            .query_row(
+                "SELECT EXISTS(
+                SELECT 1 FROM rom_locations
+                WHERE sha256=?1 AND availability='available'
+            )",
+                [sha256],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|value| value != 0)
+    }
+
     pub fn sync_rom_inventory(
         &self,
         root: &ScanRoot,
@@ -108,12 +121,13 @@ impl Database {
                 "INSERT INTO rom_locations(
                     game_id, system_id, path, extension, size_bytes, modified_at, sha256,
                     availability, last_seen_at
-                 ) VALUES (NULL, ?1, ?2, ?3, ?4, ?5, NULL, 'available', ?6)
+                 ) VALUES (NULL, ?1, ?2, ?3, ?4, ?5, ?6, 'available', ?7)
                  ON CONFLICT(path) DO UPDATE SET
                     system_id=excluded.system_id,
                     extension=excluded.extension,
                     size_bytes=excluded.size_bytes,
                     modified_at=excluded.modified_at,
+                    sha256=excluded.sha256,
                     availability='available',
                     last_seen_at=excluded.last_seen_at",
                 params![
@@ -122,6 +136,7 @@ impl Database {
                     observation.extension,
                     observation.size_bytes,
                     observation.modified_at,
+                    observation.sha256,
                     now,
                 ],
             )?;

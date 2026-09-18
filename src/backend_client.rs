@@ -4,12 +4,21 @@ use crate::{
     models::{CacheSnapshot, UserOverride},
 };
 use anyhow::{Context, Result};
+use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RomDownload {
     pub path: PathBuf,
+    pub file_name: String,
+    pub size_bytes: u64,
+    pub sha256: String,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct RomUpload {
+    pub upload_id: String,
     pub file_name: String,
     pub size_bytes: u64,
     pub sha256: String,
@@ -99,6 +108,43 @@ impl BackendClient {
         let games_written = snapshot.games.len();
         write_cache_atomic(cache_path, &snapshot)?;
         Ok(games_written)
+    }
+
+    pub async fn upload_rom(
+        &self,
+        bearer_token: &str,
+        system_id: i64,
+        source: &Path,
+    ) -> Result<RomUpload> {
+        if system_id <= 0 {
+            anyhow::bail!("system_id doit être positif");
+        }
+        let file_name = source
+            .file_name()
+            .and_then(|name| name.to_str())
+            .filter(|name| !name.is_empty() && !name.contains(['/', '\\', '\r', '\n']))
+            .context("nom de ROM local invalide")?;
+        let bytes = std::fs::read(source)
+            .with_context(|| format!("lecture de la ROM {}", source.display()))?;
+        if bytes.is_empty() {
+            anyhow::bail!("ROM locale vide");
+        }
+        self.http
+            .post(format!(
+                "{}/api/v1/library/uploads?system_id={system_id}",
+                self.base_url
+            ))
+            .bearer_auth(bearer_token)
+            .header("x-monolith-file-name", file_name)
+            .body(bytes)
+            .send()
+            .await
+            .context("backend inaccessible")?
+            .error_for_status()
+            .context("import ROM refusé")?
+            .json()
+            .await
+            .context("réponse d’import ROM invalide")
     }
 
     pub async fn download_game_rom(

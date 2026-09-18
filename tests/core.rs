@@ -109,6 +109,7 @@ fn cache_exposes_launch_availability_from_linked_rom_locations() {
             extension: "chd".into(),
             size_bytes: 123,
             modified_at: Some(10),
+            sha256: None,
         }],
     )
     .unwrap();

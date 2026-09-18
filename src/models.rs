@@ -51,6 +51,7 @@ pub struct ScanObservation {
     pub extension: String,
     pub size_bytes: u64,
     pub modified_at: Option<i64>,
+    pub sha256: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

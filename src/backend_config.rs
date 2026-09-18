@@ -13,14 +13,32 @@ pub struct BackendConfig {
     pub library: LibraryConfig,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct LibraryConfig {
     pub roots: Vec<ScanRoot>,
+    pub upload_root: String,
+}
+
+impl Default for LibraryConfig {
+    fn default() -> Self {
+        Self {
+            roots: Vec::new(),
+            upload_root: "/var/lib/monolith/roms/00_inbox".into(),
+        }
+    }
 }
 
 impl LibraryConfig {
+    pub fn validate(&self) -> Result<()> {
+        if !Path::new(&self.upload_root).is_absolute() {
+            bail!("library.upload_root doit être un chemin absolu");
+        }
+        Ok(())
+    }
+
     fn normalize_and_validate(&mut self) -> Result<()> {
+        self.validate()?;
         for root in &mut self.roots {
             root.extensions = root
                 .extensions

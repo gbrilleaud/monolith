@@ -75,6 +75,14 @@ fn scanner_accepts_configured_extensions_without_touching_other_files() {
     assert_eq!(report.ignored, 1);
     assert_eq!(report.issues.len(), 0);
     assert_eq!(report.observations.len(), 2);
+    assert_eq!(
+        report
+            .observations
+            .iter()
+            .find(|observation| observation.extension == "iso")
+            .and_then(|observation| observation.sha256.as_deref()),
+        Some("a5328a623750b65007d7bb7733a20faaad2f1d6b5b4855820a77e75114f1c69f")
+    );
     let paths = report
         .observations
         .iter()
@@ -118,6 +126,7 @@ fn observation(system_id: i64, path: &str, size_bytes: u64, modified_at: i64) ->
         extension: path.rsplit('.').next().unwrap().into(),
         size_bytes,
         modified_at: Some(modified_at),
+        sha256: None,
     }
 }
 

@@ -2,7 +2,7 @@ use monolith::{
     auth::Role,
     backend::{router, BackendState},
     backend_client::BackendClient,
-    backend_config::BackendConfig,
+    backend_config::{BackendConfig, LibraryConfig},
     db::Database,
     models::{GameMetadata, ScanObservation, ScanRoot, UserOverride},
 };
@@ -117,6 +117,51 @@ async fn read_only_account_can_download_but_not_upload() {
 }
 
 #[tokio::test]
+async fn read_only_account_cannot_upload_a_rom() {
+    let directory = tempfile::tempdir().unwrap();
+    let database_path = directory.path().join("backend.db");
+    let upload_root = directory.path().join("roms/00_inbox");
+    let database = Database::open(&database_path).unwrap();
+    database
+        .create_local_user("alice", "safe-password", Role::ReadOnly)
+        .unwrap();
+    let state = BackendState::new(
+        BackendConfig {
+            database_path: database_path.display().to_string(),
+            library: LibraryConfig {
+                roots: vec![ScanRoot {
+                    system_id: 10,
+                    path: directory.path().join("roms/10").display().to_string(),
+                    extensions: vec!["gdi".into()],
+                }],
+                upload_root: upload_root.display().to_string(),
+            },
+            ..BackendConfig::default()
+        },
+        directory.path(),
+    )
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, router(state)).await.unwrap() });
+    let base_url = format!("http://{address}");
+    let client = BackendClient::new(&base_url).unwrap();
+    let login = client.login_local("alice", "safe-password").await.unwrap();
+
+    let response = reqwest::Client::new()
+        .post(format!("{base_url}/api/v1/library/uploads?system_id=10"))
+        .bearer_auth(login.access_token)
+        .header("x-monolith-file-name", "forbidden.zip")
+        .body("private-rom-content")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+    assert!(!upload_root.exists());
+}
+
+#[tokio::test]
 async fn standard_user_downloads_only_an_available_linked_rom_atomically() {
     let directory = tempfile::tempdir().unwrap();
     let database_path = directory.path().join("backend.db");
@@ -142,6 +187,7 @@ async fn standard_user_downloads_only_an_available_linked_rom_atomically() {
                 extension: "zip".into(),
                 size_bytes: source_bytes.len() as u64,
                 modified_at: None,
+                sha256: None,
             }],
         )
         .unwrap();
@@ -177,4 +223,70 @@ async fn standard_user_downloads_only_an_available_linked_rom_atomically() {
     assert!(!destination
         .join("Global Gladiators (Europe).zip.partial")
         .exists());
+}
+
+#[tokio::test]
+async fn standard_user_uploads_to_the_configured_inbox_without_a_partial_file() {
+    let directory = tempfile::tempdir().unwrap();
+    let database_path = directory.path().join("backend.db");
+    let upload_root = directory.path().join("roms/00_inbox");
+    let database = Database::open(&database_path).unwrap();
+    database
+        .create_local_user("alice", "safe-password", Role::Standard)
+        .unwrap();
+    let state = BackendState::new(
+        BackendConfig {
+            database_path: database_path.display().to_string(),
+            library: LibraryConfig {
+                roots: vec![ScanRoot {
+                    system_id: 10,
+                    path: directory.path().join("roms/10").display().to_string(),
+                    extensions: vec!["gdi".into()],
+                }],
+                upload_root: upload_root.display().to_string(),
+            },
+            ..BackendConfig::default()
+        },
+        directory.path(),
+    )
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, router(state)).await.unwrap() });
+    let base_url = format!("http://{address}");
+    let client = BackendClient::new(&base_url).unwrap();
+    let login = client.login_local("alice", "safe-password").await.unwrap();
+
+    let source = directory.path().join("Ikaruga (Europe).gdi");
+    std::fs::write(&source, b"disc-image").unwrap();
+    let upload = client
+        .upload_rom(&login.access_token, 10, &source)
+        .await
+        .unwrap();
+
+    assert_eq!(upload.file_name, "Ikaruga (Europe).gdi");
+    assert_eq!(upload.size_bytes, 10);
+    assert_eq!(upload.sha256.len(), 64);
+    let duplicate = client
+        .upload_rom(&login.access_token, 10, &source)
+        .await
+        .unwrap_err();
+    assert!(duplicate.to_string().contains("import ROM refusé"));
+    let upload_directories = std::fs::read_dir(&upload_root)
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(upload_directories.len(), 1);
+    let upload_directory = upload_directories[0].path();
+    assert!(upload_directory.is_dir());
+    let files = std::fs::read_dir(&upload_directory)
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(files.len(), 1);
+    let uploaded = files[0].path();
+    assert_eq!(std::fs::read(&uploaded).unwrap(), b"disc-image");
+    assert!(!uploaded
+        .extension()
+        .is_some_and(|extension| extension == "partial"));
 }
