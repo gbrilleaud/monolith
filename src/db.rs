@@ -217,6 +217,38 @@ impl Database {
         locations
     }
 
+    pub fn record_published_rom(
+        &self,
+        system_id: i64,
+        path: &Path,
+        size_bytes: u64,
+        sha256: &str,
+    ) -> AnyResult<()> {
+        let extension = path
+            .extension()
+            .and_then(|value| value.to_str())
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| anyhow!("extension ROM absente : {}", path.display()))?;
+        self.conn.execute(
+            "INSERT INTO rom_locations(game_id, system_id, path, extension, size_bytes, modified_at, sha256,
+                                       availability, last_seen_at)
+             VALUES (NULL, ?1, ?2, ?3, ?4, NULL, ?5, 'available', ?6)
+             ON CONFLICT(path) DO UPDATE SET
+                game_id=NULL, system_id=excluded.system_id, extension=excluded.extension,
+                size_bytes=excluded.size_bytes, sha256=excluded.sha256, availability='available',
+                last_seen_at=excluded.last_seen_at",
+            params![
+                system_id,
+                path.display().to_string(),
+                extension.to_ascii_lowercase(),
+                size_bytes,
+                sha256,
+                Utc::now().to_rfc3339()
+            ],
+        )?;
+        Ok(())
+    }
+
     pub fn record_downloaded_rom(
         &self,
         game_id: i64,

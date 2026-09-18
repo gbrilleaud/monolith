@@ -162,6 +162,23 @@ async fn read_only_account_cannot_upload_a_rom() {
 }
 
 #[tokio::test]
+async fn standard_user_cannot_publish_an_inbox_rom() {
+    let (client, directory) = test_server(Role::Standard).await;
+    let login = client.login_local("alice", "safe-password").await.unwrap();
+    let response = reqwest::Client::new()
+        .post(format!(
+            "{}/api/v1/library/uploads/00000000-0000-0000-0000-000000000000/publish?system_id=10",
+            client.base_url()
+        ))
+        .bearer_auth(login.access_token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+    assert!(!directory.path().join("roms/00_inbox").exists());
+}
+
+#[tokio::test]
 async fn standard_user_downloads_only_an_available_linked_rom_atomically() {
     let directory = tempfile::tempdir().unwrap();
     let database_path = directory.path().join("backend.db");
@@ -234,6 +251,9 @@ async fn standard_user_uploads_to_the_configured_inbox_without_a_partial_file() 
     database
         .create_local_user("alice", "safe-password", Role::Standard)
         .unwrap();
+    database
+        .create_local_user("admin", "admin-password", Role::Admin)
+        .unwrap();
     let state = BackendState::new(
         BackendConfig {
             database_path: database_path.display().to_string(),
@@ -289,4 +309,26 @@ async fn standard_user_uploads_to_the_configured_inbox_without_a_partial_file() 
     assert!(!uploaded
         .extension()
         .is_some_and(|extension| extension == "partial"));
+
+    let admin = client.login_local("admin", "admin-password").await.unwrap();
+    let published = reqwest::Client::new()
+        .post(format!(
+            "{base_url}/api/v1/library/uploads/{}/publish?system_id=10",
+            upload.upload_id
+        ))
+        .bearer_auth(admin.access_token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(published.status(), reqwest::StatusCode::CREATED);
+    let destination = directory.path().join("roms/10/Ikaruga (Europe).gdi");
+    assert_eq!(std::fs::read(&destination).unwrap(), b"disc-image");
+    assert!(!upload_directory.exists());
+    let locations = Database::open(&database_path)
+        .unwrap()
+        .unlinked_rom_locations()
+        .unwrap();
+    assert_eq!(locations.len(), 1);
+    assert_eq!(locations[0].path, destination.display().to_string());
+    assert_eq!(locations[0].sha256, Some(upload.sha256));
 }

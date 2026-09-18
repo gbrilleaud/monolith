@@ -37,9 +37,13 @@ impl BackendClient {
             anyhow::bail!("URL backend invalide");
         }
         Ok(Self {
-            base_url,
+            base_url: base_url.trim_end_matches('/').to_owned(),
             http: reqwest::Client::new(),
         })
+    }
+
+    pub fn base_url(&self) -> &str {
+        &self.base_url
     }
 
     pub async fn health(&self) -> Result<HealthResponse> {

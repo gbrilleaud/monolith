@@ -56,6 +56,10 @@ pub fn router(state: BackendState) -> Router {
         .route("/api/v1/games/:game_id/rom", get(download_game_rom))
         .route("/api/v1/library/uploads", post(upload_rom))
         .route(
+            "/api/v1/library/uploads/:upload_id/publish",
+            post(publish_upload),
+        )
+        .route(
             "/api/v1/users/:user_id/overrides/:game_id",
             put(save_override),
         )
@@ -297,6 +301,93 @@ async fn upload_rom(
             sha256,
         }),
     ))
+}
+
+async fn publish_upload(
+    State(state): State<BackendState>,
+    headers: HeaderMap,
+    Path(upload_id): Path<String>,
+    Query(query): Query<UploadQuery>,
+) -> Result<StatusCode, ApiError> {
+    let principal = authenticate(&state, &headers).await?;
+    if !matches!(principal.role, crate::auth::Role::Admin) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "rom_publish_forbidden",
+        ));
+    }
+    let upload_id = uuid::Uuid::parse_str(&upload_id)
+        .map_err(|_| ApiError::new(StatusCode::BAD_REQUEST, "invalid_upload_id"))?
+        .to_string();
+    let root = state
+        .config
+        .library
+        .roots
+        .iter()
+        .find(|root| root.system_id == query.system_id)
+        .ok_or_else(|| ApiError::new(StatusCode::BAD_REQUEST, "upload_system_not_configured"))?;
+    let inbox = PathBuf::from(&state.config.library.upload_root).join(upload_id);
+    let mut files = std::fs::read_dir(&inbox)
+        .map_err(|_| ApiError::new(StatusCode::NOT_FOUND, "upload_not_found"))?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| {
+            path.is_file()
+                && path
+                    .extension()
+                    .is_none_or(|extension| extension != "partial")
+        })
+        .collect::<Vec<_>>();
+    if files.len() != 1 {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "upload_contents_invalid",
+        ));
+    }
+    let source = files.pop().expect("exactly one upload file");
+    let extension = source
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if !root.extensions.iter().any(|allowed| allowed == &extension) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "rom_extension_not_allowed",
+        ));
+    }
+    let file_name = source
+        .file_name()
+        .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "upload_contents_invalid"))?;
+    let destination_directory = PathBuf::from(&root.path);
+    let destination = destination_directory.join(file_name);
+    if destination.exists() {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "rom_destination_exists",
+        ));
+    }
+    let bytes = std::fs::read(&source).map_err(ApiError::internal)?;
+    let sha256 = format!("{:x}", Sha256::digest(&bytes));
+    if state
+        .database()?
+        .has_available_rom_sha256(&sha256)
+        .map_err(ApiError::internal)?
+    {
+        return Err(ApiError::new(StatusCode::CONFLICT, "rom_duplicate"));
+    }
+    std::fs::create_dir_all(&destination_directory).map_err(ApiError::internal)?;
+    std::fs::rename(&source, &destination).map_err(ApiError::internal)?;
+    if let Err(error) = state.database()?.record_published_rom(
+        query.system_id,
+        &destination,
+        bytes.len() as u64,
+        &sha256,
+    ) {
+        let _ = std::fs::rename(&destination, &source);
+        return Err(ApiError::internal(error));
+    }
+    let _ = std::fs::remove_dir(&inbox);
+    Ok(StatusCode::CREATED)
 }
 
 fn inbox_contains_sha256(root: &str, expected: &str) -> std::io::Result<bool> {
