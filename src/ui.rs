@@ -1,5 +1,9 @@
 use crate::auth::AuthMode;
 use crate::cache::load_cache;
+use crate::catalog_query::{
+    filter_and_sort_catalog_rows, CatalogRow, CatalogSort, CatalogSortColumn, CatalogViewMode,
+    SortDirection,
+};
 use crate::client_auth::{AuthState, ClientAuth};
 use crate::client_inventory::{ClientInventory, InventoryRefreshState};
 use crate::client_rom_download::{ClientRomDownload, RomDownloadState};
@@ -24,6 +28,8 @@ pub struct MonolithApp {
     emulator_launcher: EmulatorLauncher,
     nav: Navigator,
     search: String,
+    catalog_view: CatalogViewMode,
+    catalog_sort: CatalogSort,
     edit_game_id: Option<i64>,
     edit_description: String,
     edit_cover: String,
@@ -63,6 +69,8 @@ impl MonolithApp {
             emulator_launcher,
             nav: Navigator::default(),
             search: String::new(),
+            catalog_view: CatalogViewMode::Tiles,
+            catalog_sort: CatalogSort::new(CatalogSortColumn::Title, SortDirection::Ascending),
             edit_game_id: None,
             edit_description: String::new(),
             edit_cover: String::new(),
@@ -768,7 +776,12 @@ impl MonolithApp {
     fn render_catalog(&mut self, ui: &mut egui::Ui, system_id: i64) {
         ui.horizontal(|ui| {
             ui.heading("Catalogue");
-            ui.add(egui::TextEdit::singleline(&mut self.search).hint_text("Rechercher…"));
+            ui.add(
+                egui::TextEdit::singleline(&mut self.search)
+                    .hint_text("Rechercher (* et ? acceptés)…"),
+            );
+            ui.selectable_value(&mut self.catalog_view, CatalogViewMode::Tiles, "Jaquettes");
+            ui.selectable_value(&mut self.catalog_view, CatalogViewMode::Details, "Détails");
             let uploading = matches!(self.rom_upload.state(), RomUploadState::Uploading);
             if ui
                 .add_enabled(
@@ -784,68 +797,152 @@ impl MonolithApp {
                 ui.label("Import…");
             }
         });
-        let needle = self.search.to_lowercase();
         let Some(user_id) = self.active_user_id() else {
             return;
         };
-        match self.db.resolved_games(user_id) {
-            Ok(games) => {
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    ui.horizontal_wrapped(|ui| {
-                        for game in games.into_iter().filter(|game| {
-                            game.system_id == system_id
-                                && game.title.to_lowercase().contains(&needle)
-                        }) {
-                            let mut open = false;
-                            ui.group(|ui| {
-                                ui.set_width(180.0);
-                                if let Some(response) = render_cover(
-                                    ui,
-                                    game.cover_art.as_deref(),
-                                    egui::vec2(168.0, 126.0),
-                                ) {
-                                    open |= response.interact(egui::Sense::click()).clicked();
-                                }
-                                open |= ui
-                                    .add_sized([168.0, 38.0], egui::Button::new(&game.title))
-                                    .clicked();
-                                render_availability(ui, &game.launch_availability);
-                            });
-                            if open {
-                                self.nav.open_details(game.game_id);
-                            }
-                        }
-                        let local_roms = self
-                            .db
-                            .unlinked_rom_locations()
-                            .unwrap_or_default()
-                            .into_iter()
-                            .filter(|location| location.system_id == system_id);
-                        for location in local_roms {
-                            ui.group(|ui| {
-                                ui.set_width(180.0);
-                                ui.label(egui::RichText::new("ROM locale inconnue").strong());
-                                ui.label(&location.path);
-                                ui.label(format!(
-                                    "{} · {} octets",
-                                    location.extension, location.size_bytes
-                                ));
-                                if ui.button("Lancer localement").clicked() {
-                                    if let Err(error) =
-                                        launch_local_rom(&self.emulator_launcher, &location)
-                                    {
-                                        self.notice =
-                                            Some(format!("Lancement local refusé : {error}"));
-                                    }
-                                }
-                            });
-                        }
-                    });
-                });
-            }
+        let games = match self.db.resolved_games(user_id) {
+            Ok(games) => games,
             Err(error) => {
                 ui.colored_label(egui::Color32::RED, format!("Catalogue : {error}"));
+                return;
             }
+        };
+        let mut rows = games
+            .into_iter()
+            .filter(|game| game.system_id == system_id)
+            .map(catalog_row_for_game)
+            .collect::<Vec<_>>();
+        rows.extend(
+            self.db
+                .unlinked_rom_locations()
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|location| location.system_id == system_id)
+                .map(catalog_row_for_local_rom),
+        );
+        let rows = filter_and_sort_catalog_rows(&rows, &self.search, self.catalog_sort);
+        match self.catalog_view {
+            CatalogViewMode::Tiles => self.render_catalog_tiles(ui, &rows),
+            CatalogViewMode::Details => self.render_catalog_details(ui, &rows),
+        }
+    }
+
+    fn render_catalog_tiles(&mut self, ui: &mut egui::Ui, rows: &[CatalogRow]) {
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                for row in rows {
+                    ui.group(|ui| {
+                        ui.set_width(180.0);
+                        if let Some(response) =
+                            render_cover(ui, row.cover_art.as_deref(), egui::vec2(168.0, 126.0))
+                        {
+                            if response.interact(egui::Sense::click()).clicked() {
+                                if let Some(game_id) = row.game_id {
+                                    self.nav.open_details(game_id);
+                                }
+                            }
+                        }
+                        ui.label(&row.title);
+                        if let Some(game_id) = row.game_id {
+                            if ui.button("Ouvrir").clicked() {
+                                self.nav.open_details(game_id);
+                            }
+                        } else {
+                            ui.label("ROM locale inconnue");
+                            if ui.button("Lancer localement").clicked() {
+                                self.launch_unknown_local_row(row);
+                            }
+                        }
+                    });
+                }
+            });
+        });
+    }
+
+    fn render_catalog_details(&mut self, ui: &mut egui::Ui, rows: &[CatalogRow]) {
+        let columns = [
+            ("Titre", CatalogSortColumn::Title),
+            ("Fichier", CatalogSortColumn::FileName),
+            ("Favori", CatalogSortColumn::Favourite),
+            ("Ajout", CatalogSortColumn::AddedAt),
+            ("Taille", CatalogSortColumn::SizeBytes),
+            ("Extension", CatalogSortColumn::Extension),
+            ("Disponible", CatalogSortColumn::Availability),
+            ("Note", CatalogSortColumn::Rating),
+            ("Chemin", CatalogSortColumn::Path),
+        ];
+        egui::ScrollArea::both().show(ui, |ui| {
+            egui::Grid::new("catalog_details")
+                .striped(true)
+                .show(ui, |ui| {
+                    for (label, column) in columns {
+                        let marker = if self.catalog_sort.column == column {
+                            match self.catalog_sort.direction {
+                                SortDirection::Ascending => " ↑",
+                                SortDirection::Descending => " ↓",
+                            }
+                        } else {
+                            ""
+                        };
+                        if ui.button(format!("{label}{marker}")).clicked() {
+                            self.catalog_sort.direction = if self.catalog_sort.column == column
+                                && self.catalog_sort.direction == SortDirection::Ascending
+                            {
+                                SortDirection::Descending
+                            } else {
+                                SortDirection::Ascending
+                            };
+                            self.catalog_sort.column = column;
+                        }
+                    }
+                    ui.label("");
+                    ui.end_row();
+                    for row in rows {
+                        ui.label(&row.title);
+                        ui.label(&row.file_name);
+                        ui.label(if row.favourite { "★" } else { "" });
+                        ui.label(&row.added_at);
+                        ui.label(row.size_bytes.to_string());
+                        ui.label(&row.extension);
+                        ui.label(if row.available { "Oui" } else { "Non" });
+                        ui.label(
+                            row.rating
+                                .map(|rating| rating.to_string())
+                                .unwrap_or_default(),
+                        );
+                        ui.label(&row.path);
+                        if let Some(game_id) = row.game_id {
+                            if ui.button("Ouvrir").clicked() {
+                                self.nav.open_details(game_id);
+                            }
+                        } else if ui.button("Lancer").clicked() {
+                            self.launch_unknown_local_row(row);
+                        }
+                        ui.end_row();
+                    }
+                });
+        });
+    }
+
+    fn launch_unknown_local_row(&mut self, row: &CatalogRow) {
+        let location = crate::models::RomLocation {
+            id: None,
+            game_id: None,
+            system_id: row.system_id,
+            path: row.path.clone(),
+            extension: row.extension.clone(),
+            size_bytes: row.size_bytes,
+            modified_at: None,
+            sha256: None,
+            availability: if row.available {
+                crate::models::RomAvailability::Available
+            } else {
+                crate::models::RomAvailability::Missing
+            },
+            last_seen_at: row.added_at.clone(),
+        };
+        if let Err(error) = launch_local_rom(&self.emulator_launcher, &location) {
+            self.notice = Some(format!("Lancement local refusé : {error}"));
         }
     }
 
@@ -1036,6 +1133,65 @@ pub fn availability_label(availability: &LaunchAvailability) -> String {
         )
     } else {
         "Absent de la bibliothèque".into()
+    }
+}
+
+fn catalog_row_for_game(game: GameMetadata) -> CatalogRow {
+    let path = game
+        .launch_availability
+        .preferred_path
+        .clone()
+        .unwrap_or_default();
+    let file_name = std::path::Path::new(&path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(&game.title)
+        .to_owned();
+    let extension = std::path::Path::new(&path)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    CatalogRow {
+        system_id: game.system_id,
+        title: game.title,
+        file_name,
+        path,
+        extension,
+        favourite: false,
+        added_at: String::new(),
+        size_bytes: 0,
+        rating: None,
+        available: game.launch_availability.available,
+        cover_art: game.cover_art,
+        game_id: Some(game.game_id),
+    }
+}
+
+fn catalog_row_for_local_rom(location: crate::models::RomLocation) -> CatalogRow {
+    let file_name = std::path::Path::new(&location.path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(&location.path)
+        .to_owned();
+    let title = std::path::Path::new(&file_name)
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .unwrap_or(&file_name)
+        .to_owned();
+    CatalogRow {
+        system_id: location.system_id,
+        title,
+        file_name,
+        path: location.path,
+        extension: location.extension,
+        favourite: false,
+        added_at: location.last_seen_at,
+        size_bytes: location.size_bytes,
+        rating: None,
+        available: location.availability == crate::models::RomAvailability::Available,
+        cover_art: None,
+        game_id: location.game_id,
     }
 }
 
