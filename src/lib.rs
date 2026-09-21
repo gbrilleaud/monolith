@@ -15,6 +15,7 @@ pub mod inventory;
 pub mod local_rom;
 pub mod models;
 pub mod navigation;
+pub mod rom_bundle;
 pub mod session_store;
 pub mod sync;
 pub mod ui;
