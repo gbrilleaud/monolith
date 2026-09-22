@@ -2,7 +2,7 @@ use crate::{
     auth::{verify_oidc_jwt, AuthMode, AuthPrincipal, AuthSource, Role},
     backend_config::BackendConfig,
     db::Database,
-    models::{CacheSnapshot, UserOverride},
+    models::{CacheSnapshot, ScanRoot, UserOverride},
 };
 use axum::{
     body::{to_bytes, Body},
@@ -358,6 +358,11 @@ async fn publish_upload(
         .find(|root| root.system_id == query.system_id)
         .ok_or_else(|| ApiError::new(StatusCode::BAD_REQUEST, "upload_system_not_configured"))?;
     let inbox = PathBuf::from(&state.config.library.upload_root).join(upload_id);
+    if inbox.join("manifest.json").is_file() {
+        publish_zip_bundle(&inbox, root)?;
+        std::fs::remove_dir_all(&inbox).map_err(ApiError::internal)?;
+        return Ok(StatusCode::CREATED);
+    }
     let mut files = std::fs::read_dir(&inbox)
         .map_err(|_| ApiError::new(StatusCode::NOT_FOUND, "upload_not_found"))?
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
@@ -469,6 +474,55 @@ async fn save_override(
         .save_override(&value)
         .map_err(ApiError::internal)?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+fn publish_zip_bundle(inbox: &std::path::Path, root: &ScanRoot) -> Result<(), ApiError> {
+    let archive_path = std::fs::read_dir(inbox)
+        .map_err(ApiError::internal)?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .find(|path| path.extension().is_some_and(|extension| extension == "zip"))
+        .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "bundle_archive_missing"))?;
+    let bytes = std::fs::read(&archive_path).map_err(ApiError::internal)?;
+    let entries = validate_zip_bundle(&bytes, &root.extensions)?;
+    let destination = PathBuf::from(&root.path);
+    std::fs::create_dir_all(&destination).map_err(ApiError::internal)?;
+    for entry in &entries {
+        let name = entry["file_name"]
+            .as_str()
+            .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "bundle_manifest_invalid"))?;
+        if destination.join(name).exists() {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "rom_destination_exists",
+            ));
+        }
+    }
+    let staging = destination.join(format!(".monolith-bundle-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir(&staging).map_err(ApiError::internal)?;
+    let result = (|| -> Result<(), ApiError> {
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes))
+            .map_err(|_| ApiError::new(StatusCode::CONFLICT, "bundle_archive_invalid"))?;
+        for index in 0..archive.len() {
+            let mut entry = archive.by_index(index).map_err(ApiError::internal)?;
+            let name = std::path::Path::new(entry.name())
+                .file_name()
+                .and_then(|value| value.to_str())
+                .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "bundle_entry_path_invalid"))?;
+            let mut target =
+                std::fs::File::create(staging.join(name)).map_err(ApiError::internal)?;
+            std::io::copy(&mut entry, &mut target).map_err(ApiError::internal)?;
+        }
+        for entry in &entries {
+            let name = entry["file_name"]
+                .as_str()
+                .expect("validated manifest name");
+            std::fs::rename(staging.join(name), destination.join(name))
+                .map_err(ApiError::internal)?;
+        }
+        Ok(())
+    })();
+    let _ = std::fs::remove_dir_all(&staging);
+    result
 }
 
 fn validate_zip_bundle(

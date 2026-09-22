@@ -317,7 +317,7 @@ async fn standard_user_uploads_to_the_configured_inbox_without_a_partial_file() 
             "{base_url}/api/v1/library/uploads/{}/publish?system_id=10",
             upload.upload_id
         ))
-        .bearer_auth(admin.access_token)
+        .bearer_auth(admin.access_token.clone())
         .send()
         .await
         .unwrap();
@@ -349,5 +349,23 @@ async fn standard_user_uploads_to_the_configured_inbox_without_a_partial_file() 
     assert!(std::fs::read_to_string(manifest)
         .unwrap()
         .contains("Ikaruga Disc 1.gdi"));
+    let bundle_published = reqwest::Client::new()
+        .post(format!(
+            "{base_url}/api/v1/library/uploads/{}/publish?system_id=10",
+            bundled_upload.upload_id
+        ))
+        .bearer_auth(admin.access_token.clone())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(bundle_published.status(), reqwest::StatusCode::CREATED);
+    assert_eq!(
+        std::fs::read(directory.path().join("roms/10/Ikaruga Disc 1.gdi")).unwrap(),
+        b"disc-one"
+    );
+    assert_eq!(
+        std::fs::read(directory.path().join("roms/10/Ikaruga Disc 2.gdi")).unwrap(),
+        b"disc-two"
+    );
     bundle.cleanup().unwrap();
 }
