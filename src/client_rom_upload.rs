@@ -1,7 +1,10 @@
-use crate::backend_client::{BackendClient, RomUpload};
+use crate::{
+    backend_client::{BackendClient, RomUpload},
+    rom_bundle::{build_rom_bundle, BundleKind},
+};
 use anyhow::Result;
 use std::{
-    path::Path,
+    path::PathBuf,
     sync::mpsc::{self, Receiver, TryRecvError},
     thread,
 };
@@ -43,15 +46,17 @@ impl ClientRomUpload {
         backend_url: String,
         bearer_token: String,
         system_id: i64,
-        source: impl AsRef<Path>,
+        sources: Vec<PathBuf>,
     ) -> Result<()> {
+        if sources.is_empty() {
+            anyhow::bail!("aucune ROM sélectionnée");
+        }
         if self.receiver.is_some() {
             anyhow::bail!("import ROM déjà en cours");
         }
-        let source = source.as_ref().to_path_buf();
         let (sender, receiver) = mpsc::channel();
         thread::spawn(move || {
-            let result = upload(&backend_url, &bearer_token, system_id, &source)
+            let result = upload(&backend_url, &bearer_token, system_id, &sources)
                 .map_err(|error| format!("{error:#}"));
             let _ = sender.send(result);
         });
@@ -87,12 +92,25 @@ fn upload(
     backend_url: &str,
     bearer_token: &str,
     system_id: i64,
-    source: &Path,
+    sources: &[PathBuf],
 ) -> Result<RomUpload> {
+    let bundle = build_rom_bundle(sources)?;
     let runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(async {
-        BackendClient::new(backend_url)?
-            .upload_rom(bearer_token, system_id, source)
-            .await
-    })
+    let result = runtime.block_on(async {
+        let client = BackendClient::new(backend_url)?;
+        match bundle.kind {
+            BundleKind::SingleFile => {
+                client
+                    .upload_rom(bearer_token, system_id, &bundle.path)
+                    .await
+            }
+            BundleKind::ZipArchive => {
+                client
+                    .upload_rom_bundle(bearer_token, system_id, &bundle)
+                    .await
+            }
+        }
+    });
+    bundle.cleanup()?;
+    result
 }

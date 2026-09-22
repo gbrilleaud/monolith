@@ -41,7 +41,7 @@ pub struct MonolithApp {
     rom_download: ClientRomDownload,
     downloading_game_id: Option<i64>,
     rom_upload: ClientRomUpload,
-    rom_upload_picker: Option<Receiver<Option<PathBuf>>>,
+    rom_upload_picker: Option<Receiver<Option<Vec<PathBuf>>>>,
     rom_upload_system_id: Option<i64>,
     cache_path: PathBuf,
     imported_catalog_user_id: Option<i64>,
@@ -157,8 +157,8 @@ impl MonolithApp {
         let (sender, receiver) = mpsc::channel();
         thread::spawn(move || {
             let selection = rfd::FileDialog::new()
-                .set_title("Importer une ROM")
-                .pick_file();
+                .set_title("Importer une ou plusieurs ROMs")
+                .pick_files();
             let _ = sender.send(selection);
         });
         self.rom_upload_system_id = Some(system_id);
