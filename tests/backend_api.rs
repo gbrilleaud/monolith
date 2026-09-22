@@ -5,6 +5,7 @@ use monolith::{
     backend_config::{BackendConfig, LibraryConfig},
     db::Database,
     models::{GameMetadata, ScanObservation, ScanRoot, UserOverride},
+    rom_bundle::build_rom_bundle,
 };
 
 fn game() -> GameMetadata {
@@ -331,4 +332,22 @@ async fn standard_user_uploads_to_the_configured_inbox_without_a_partial_file() 
     assert_eq!(locations.len(), 1);
     assert_eq!(locations[0].path, destination.display().to_string());
     assert_eq!(locations[0].sha256, Some(upload.sha256));
+
+    let part_one = directory.path().join("Ikaruga Disc 1.gdi");
+    let part_two = directory.path().join("Ikaruga Disc 2.gdi");
+    std::fs::write(&part_one, b"disc-one").unwrap();
+    std::fs::write(&part_two, b"disc-two").unwrap();
+    let bundle = build_rom_bundle(&[part_one, part_two]).unwrap();
+    let bundled_upload = client
+        .upload_rom_bundle(&login.access_token, 10, &bundle)
+        .await
+        .unwrap();
+    let manifest = upload_root
+        .join(&bundled_upload.upload_id)
+        .join("manifest.json");
+    assert!(manifest.is_file());
+    assert!(std::fs::read_to_string(manifest)
+        .unwrap()
+        .contains("Ikaruga Disc 1.gdi"));
+    bundle.cleanup().unwrap();
 }

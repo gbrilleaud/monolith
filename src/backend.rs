@@ -15,7 +15,11 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    io::{Cursor, Read},
+    path::PathBuf,
+    sync::Arc,
+};
 
 #[derive(Clone)]
 pub struct BackendState {
@@ -244,6 +248,10 @@ async fn upload_rom(
         })
         .ok_or_else(|| ApiError::new(StatusCode::BAD_REQUEST, "invalid_rom_file_name"))?
         .to_owned();
+    let is_zip_bundle = headers
+        .get("x-monolith-upload-kind")
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value == "zip-bundle");
     let extension = std::path::Path::new(&file_name)
         .extension()
         .and_then(|value| value.to_str())
@@ -257,7 +265,7 @@ async fn upload_rom(
         .iter()
         .find(|root| root.system_id == query.system_id)
         .ok_or_else(|| ApiError::new(StatusCode::BAD_REQUEST, "upload_system_not_configured"))?;
-    if !root.extensions.iter().any(|allowed| allowed == &extension) {
+    if !is_zip_bundle && !root.extensions.iter().any(|allowed| allowed == &extension) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "rom_extension_not_allowed",
@@ -269,6 +277,11 @@ async fn upload_rom(
     if bytes.is_empty() {
         return Err(ApiError::new(StatusCode::BAD_REQUEST, "empty_rom_upload"));
     }
+    let manifest = if is_zip_bundle {
+        Some(validate_zip_bundle(&bytes, &root.extensions)?)
+    } else {
+        None
+    };
     let sha256 = format!("{:x}", Sha256::digest(&bytes));
     if state
         .database()?
@@ -291,6 +304,24 @@ async fn upload_rom(
         let _ = std::fs::remove_file(&partial);
         let _ = std::fs::remove_dir(&directory);
         return Err(ApiError::internal(error));
+    }
+    if let Some(entries) = manifest {
+        let manifest = json!({
+            "kind": "zip-bundle",
+            "system_id": query.system_id,
+            "archive_sha256": sha256,
+            "entries": entries,
+        });
+        let partial = directory.join(".manifest.json.partial");
+        let final_path = directory.join("manifest.json");
+        if let Err(error) = serde_json::to_vec_pretty(&manifest)
+            .map_err(std::io::Error::other)
+            .and_then(|body| std::fs::write(&partial, body))
+            .and_then(|_| std::fs::rename(&partial, &final_path))
+        {
+            let _ = std::fs::remove_dir_all(&directory);
+            return Err(ApiError::internal(error));
+        }
     }
     Ok((
         StatusCode::CREATED,
@@ -438,6 +469,63 @@ async fn save_override(
         .save_override(&value)
         .map_err(ApiError::internal)?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+fn validate_zip_bundle(
+    bytes: &[u8],
+    allowed_extensions: &[String],
+) -> Result<Vec<serde_json::Value>, ApiError> {
+    let mut archive = zip::ZipArchive::new(Cursor::new(bytes))
+        .map_err(|_| ApiError::new(StatusCode::BAD_REQUEST, "invalid_rom_bundle"))?;
+    if archive.is_empty() || archive.len() > 128 {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "bundle_entry_count_invalid",
+        ));
+    }
+    let mut names = std::collections::BTreeSet::new();
+    let mut entries = Vec::with_capacity(archive.len());
+    for index in 0..archive.len() {
+        let mut entry = archive
+            .by_index(index)
+            .map_err(|_| ApiError::new(StatusCode::BAD_REQUEST, "invalid_rom_bundle"))?;
+        let name = entry.name().to_owned();
+        let basename = std::path::Path::new(&name)
+            .file_name()
+            .and_then(|value| value.to_str())
+            .filter(|value| *value == name)
+            .ok_or_else(|| ApiError::new(StatusCode::BAD_REQUEST, "bundle_entry_path_invalid"))?;
+        if entry.is_dir() || entry.size() == 0 || !names.insert(basename.to_ascii_lowercase()) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "bundle_entry_invalid",
+            ));
+        }
+        let extension = std::path::Path::new(basename)
+            .extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if !allowed_extensions
+            .iter()
+            .any(|allowed| allowed == &extension)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "bundle_extension_not_allowed",
+            ));
+        }
+        let mut contents = Vec::new();
+        entry
+            .read_to_end(&mut contents)
+            .map_err(ApiError::internal)?;
+        entries.push(json!({
+            "file_name": basename,
+            "size_bytes": contents.len(),
+            "sha256": format!("{:x}", Sha256::digest(&contents)),
+        }));
+    }
+    Ok(entries)
 }
 
 async fn authenticate(

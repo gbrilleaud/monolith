@@ -2,6 +2,7 @@ use crate::{
     backend::{HealthResponse, IdentityResponse, LoginRequest, LoginResponse},
     cache::write_cache_atomic,
     models::{CacheSnapshot, UserOverride},
+    rom_bundle::RomBundle,
 };
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -149,6 +150,36 @@ impl BackendClient {
             .json()
             .await
             .context("réponse d’import ROM invalide")
+    }
+
+    pub async fn upload_rom_bundle(
+        &self,
+        bearer_token: &str,
+        system_id: i64,
+        bundle: &RomBundle,
+    ) -> Result<RomUpload> {
+        if system_id <= 0 || !matches!(bundle.kind, crate::rom_bundle::BundleKind::ZipArchive) {
+            anyhow::bail!("bundle ROM invalide");
+        }
+        let bytes = std::fs::read(&bundle.path)
+            .with_context(|| format!("lecture bundle ROM {}", bundle.path.display()))?;
+        self.http
+            .post(format!(
+                "{}/api/v1/library/uploads?system_id={system_id}",
+                self.base_url
+            ))
+            .bearer_auth(bearer_token)
+            .header("x-monolith-file-name", &bundle.display_name)
+            .header("x-monolith-upload-kind", "zip-bundle")
+            .body(bytes)
+            .send()
+            .await
+            .context("backend inaccessible")?
+            .error_for_status()
+            .context("import bundle ROM refusé")?
+            .json()
+            .await
+            .context("réponse d’import bundle invalide")
     }
 
     pub async fn download_game_rom(
