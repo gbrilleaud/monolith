@@ -504,6 +504,7 @@ fn publish_zip_bundle(
     }
     let staging = destination.join(format!(".monolith-bundle-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir(&staging).map_err(ApiError::internal)?;
+    let mut moved = Vec::with_capacity(entries.len());
     let result = (|| -> Result<(), ApiError> {
         let mut archive = zip::ZipArchive::new(Cursor::new(bytes))
             .map_err(|_| ApiError::new(StatusCode::CONFLICT, "bundle_archive_invalid"))?;
@@ -523,6 +524,7 @@ fn publish_zip_bundle(
                 .expect("validated manifest name");
             let published = destination.join(name);
             std::fs::rename(staging.join(name), &published).map_err(ApiError::internal)?;
+            moved.push((published.clone(), staging.join(name)));
             let size_bytes = entry["size_bytes"]
                 .as_u64()
                 .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "bundle_manifest_invalid"))?;
@@ -535,6 +537,11 @@ fn publish_zip_bundle(
         }
         Ok(())
     })();
+    if result.is_err() {
+        for (published, staged) in moved.into_iter().rev() {
+            let _ = std::fs::rename(published, staged);
+        }
+    }
     let _ = std::fs::remove_dir_all(&staging);
     result
 }
