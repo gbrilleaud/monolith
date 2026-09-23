@@ -367,5 +367,13 @@ async fn standard_user_uploads_to_the_configured_inbox_without_a_partial_file() 
         std::fs::read(directory.path().join("roms/10/Ikaruga Disc 2.gdi")).unwrap(),
         b"disc-two"
     );
+    assert_eq!(
+        Database::open(&database_path)
+            .unwrap()
+            .unlinked_rom_locations()
+            .unwrap()
+            .len(),
+        3
+    );
     bundle.cleanup().unwrap();
 }

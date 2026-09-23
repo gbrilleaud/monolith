@@ -359,7 +359,8 @@ async fn publish_upload(
         .ok_or_else(|| ApiError::new(StatusCode::BAD_REQUEST, "upload_system_not_configured"))?;
     let inbox = PathBuf::from(&state.config.library.upload_root).join(upload_id);
     if inbox.join("manifest.json").is_file() {
-        publish_zip_bundle(&inbox, root)?;
+        let database = state.database()?;
+        publish_zip_bundle(&inbox, root, &database)?;
         std::fs::remove_dir_all(&inbox).map_err(ApiError::internal)?;
         return Ok(StatusCode::CREATED);
     }
@@ -476,7 +477,11 @@ async fn save_override(
     Ok(StatusCode::NO_CONTENT)
 }
 
-fn publish_zip_bundle(inbox: &std::path::Path, root: &ScanRoot) -> Result<(), ApiError> {
+fn publish_zip_bundle(
+    inbox: &std::path::Path,
+    root: &ScanRoot,
+    database: &Database,
+) -> Result<(), ApiError> {
     let archive_path = std::fs::read_dir(inbox)
         .map_err(ApiError::internal)?
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
@@ -516,7 +521,16 @@ fn publish_zip_bundle(inbox: &std::path::Path, root: &ScanRoot) -> Result<(), Ap
             let name = entry["file_name"]
                 .as_str()
                 .expect("validated manifest name");
-            std::fs::rename(staging.join(name), destination.join(name))
+            let published = destination.join(name);
+            std::fs::rename(staging.join(name), &published).map_err(ApiError::internal)?;
+            let size_bytes = entry["size_bytes"]
+                .as_u64()
+                .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "bundle_manifest_invalid"))?;
+            let sha256 = entry["sha256"]
+                .as_str()
+                .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "bundle_manifest_invalid"))?;
+            database
+                .record_published_rom(root.system_id, &published, size_bytes, sha256)
                 .map_err(ApiError::internal)?;
         }
         Ok(())
