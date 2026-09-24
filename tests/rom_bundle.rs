@@ -6,7 +6,7 @@ fn one_rom_file_is_sent_directly_without_creating_an_archive() {
     let source = directory.path().join("Rayman 2.iso");
     std::fs::write(&source, b"single-rom").unwrap();
 
-    let bundle = build_rom_bundle(&[source.clone()]).unwrap();
+    let bundle = build_rom_bundle(std::slice::from_ref(&source)).unwrap();
 
     assert_eq!(bundle.kind, BundleKind::SingleFile);
     assert_eq!(bundle.path, source);
