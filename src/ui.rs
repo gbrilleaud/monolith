@@ -15,8 +15,7 @@ use crate::local_rom::launch_local_rom;
 use crate::models::{GameMetadata, LaunchAvailability, ScanRoot, UserOverride};
 use crate::navigation::{AppView, Navigator};
 use crate::retroarch_installer::{
-    RetroArchInstallState, RetroArchInstaller, PCSX2_WINDOWS_X64_SETUP_URL,
-    XENIA_CANARY_WINDOWS_X64_ARCHIVE_URL,
+    RetroArchInstallState, RetroArchInstaller, XENIA_CANARY_WINDOWS_X64_ARCHIVE_URL,
 };
 use crate::sync::SyncEngine;
 use eframe::egui;
@@ -186,6 +185,40 @@ impl MonolithApp {
                 ));
             }
             Err(error) => self.notice = Some(format!("Installation RetroArch refusée : {error}")),
+        }
+    }
+
+    fn install_pcsx2(&mut self) {
+        let data_directory = match self.database_path.parent() {
+            Some(directory) => directory,
+            None => {
+                self.notice = Some("Dossier de données client introuvable".into());
+                return;
+            }
+        };
+        let configured_root = std::env::var_os("MONOLITH_INSTALL_ROOT")
+            .map(PathBuf::from)
+            .or_else(|| {
+                crate::client_config::ClientConfig::load_or_default(&self.client_config_path)
+                    .ok()
+                    .and_then(|config| config.install_root.map(PathBuf::from))
+            });
+        let install_root = configured_root.unwrap_or_else(|| {
+            data_directory
+                .parent()
+                .filter(|parent| parent.is_absolute())
+                .map(PathBuf::from)
+                .or_else(|| std::env::current_dir().ok())
+                .unwrap_or_else(|| data_directory.to_path_buf())
+        });
+        match self.retroarch_installer.start_pcsx2(&install_root) {
+            Ok(()) => {
+                self.notice = Some(format!(
+                    "Téléchargement de PCSX2 vers {}…",
+                    install_root.join("tools").join("pcsx2").display()
+                ))
+            }
+            Err(error) => self.notice = Some(format!("Installation PCSX2 refusée : {error}")),
         }
     }
 
@@ -671,9 +704,8 @@ impl eframe::App for MonolithApp {
                 if ui.button("Installer RetroArch").clicked() {
                     self.install_retroarch();
                 }
-                if ui.button("Télécharger PCSX2 2.8.0").clicked() {
-                    ui.ctx()
-                        .open_url(egui::OpenUrl::new_tab(PCSX2_WINDOWS_X64_SETUP_URL));
+                if ui.button("Installer PCSX2 2.8.0").clicked() {
+                    self.install_pcsx2();
                 }
                 if ui.button("Télécharger Xenia Canary").clicked() {
                     ui.ctx()

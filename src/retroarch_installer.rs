@@ -49,14 +49,38 @@ impl RetroArchInstaller {
     }
 
     pub fn start(&mut self, install_root: impl AsRef<Path>) -> Result<()> {
+        self.start_download(
+            install_root.as_ref(),
+            retroarch_install_directory,
+            RETROARCH_WINDOWS_X64_SETUP_URL,
+            "RetroArch-Win64-setup.exe",
+        )
+    }
+
+    pub fn start_pcsx2(&mut self, install_root: impl AsRef<Path>) -> Result<()> {
+        self.start_download(
+            install_root.as_ref(),
+            pcsx2_install_directory,
+            PCSX2_WINDOWS_X64_SETUP_URL,
+            "PCSX2-v2.8.0-windows-x64-installer.exe",
+        )
+    }
+
+    fn start_download(
+        &mut self,
+        install_root: &Path,
+        directory: fn(&Path) -> Result<PathBuf>,
+        url: &'static str,
+        setup_name: &'static str,
+    ) -> Result<()> {
         if self.receiver.is_some() {
-            bail!("installation RetroArch déjà en cours");
+            bail!("téléchargement d’émulateur déjà en cours");
         }
-        let install_directory = retroarch_install_directory(install_root.as_ref())?;
+        let install_directory = directory(install_root)?;
         let (sender, receiver) = mpsc::channel();
         thread::spawn(move || {
-            let result =
-                download_and_start(&install_directory).map_err(|error| format!("{error:#}"));
+            let result = download_and_start(&install_directory, url, setup_name)
+                .map_err(|error| format!("{error:#}"));
             let _ = sender.send(result);
         });
         self.receiver = Some(receiver);
@@ -95,6 +119,13 @@ pub fn retroarch_install_directory(install_root: &Path) -> Result<PathBuf> {
     Ok(install_root.join("tools").join("retroarch"))
 }
 
+pub fn pcsx2_install_directory(install_root: &Path) -> Result<PathBuf> {
+    if !install_root.is_absolute() {
+        bail!("le répertoire d’installation Monolith doit être absolu");
+    }
+    Ok(install_root.join("tools").join("pcsx2"))
+}
+
 pub fn retroarch_setup_path(install_root: &Path) -> Result<PathBuf> {
     if !install_root.is_absolute() {
         bail!("le répertoire d’installation Monolith doit être absolu");
@@ -104,11 +135,11 @@ pub fn retroarch_setup_path(install_root: &Path) -> Result<PathBuf> {
         .join("RetroArch-Win64-setup.exe"))
 }
 
-fn download_and_start(install_directory: &Path) -> Result<PathBuf> {
+fn download_and_start(install_directory: &Path, url: &str, setup_name: &str) -> Result<PathBuf> {
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = install_directory;
-        bail!("l’installation automatique de RetroArch est disponible uniquement sous Windows");
+        let _ = (install_directory, url, setup_name);
+        bail!("l’installation automatique est disponible uniquement sous Windows");
     }
 
     #[cfg(target_os = "windows")]
@@ -117,7 +148,7 @@ fn download_and_start(install_directory: &Path) -> Result<PathBuf> {
             .parent()
             .and_then(Path::parent)
             .context("répertoire racine Monolith introuvable")?;
-        let setup_path = retroarch_setup_path(install_root)?;
+        let setup_path = install_root.join("downloads").join(setup_name);
         let setup_parent = setup_path
             .parent()
             .context("dossier de téléchargement RetroArch introuvable")?;
@@ -125,13 +156,8 @@ fn download_and_start(install_directory: &Path) -> Result<PathBuf> {
             .with_context(|| format!("création de {}", setup_parent.display()))?;
         let temporary = setup_path.with_extension("exe.partial");
         let runtime = tokio::runtime::Runtime::new()?;
-        let bytes = runtime.block_on(async {
-            reqwest::get(RETROARCH_WINDOWS_X64_SETUP_URL)
-                .await?
-                .error_for_status()?
-                .bytes()
-                .await
-        })?;
+        let bytes = runtime
+            .block_on(async { reqwest::get(url).await?.error_for_status()?.bytes().await })?;
         fs::write(&temporary, &bytes)
             .with_context(|| format!("écriture de {}", temporary.display()))?;
         fs::rename(&temporary, &setup_path)
