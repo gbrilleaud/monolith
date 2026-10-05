@@ -91,6 +91,15 @@ pub fn retroarch_install_directory(install_root: &Path) -> Result<PathBuf> {
     Ok(install_root.join("tools").join("retroarch"))
 }
 
+pub fn retroarch_setup_path(install_root: &Path) -> Result<PathBuf> {
+    if !install_root.is_absolute() {
+        bail!("le répertoire d’installation Monolith doit être absolu");
+    }
+    Ok(install_root
+        .join("downloads")
+        .join("RetroArch-Win64-setup.exe"))
+}
+
 fn download_and_start(install_directory: &Path) -> Result<PathBuf> {
     #[cfg(not(target_os = "windows"))]
     {
@@ -100,9 +109,16 @@ fn download_and_start(install_directory: &Path) -> Result<PathBuf> {
 
     #[cfg(target_os = "windows")]
     {
-        fs::create_dir_all(install_directory)
-            .with_context(|| format!("création de {}", install_directory.display()))?;
-        let setup_path = install_directory.join("RetroArch-Win64-setup.exe");
+        let install_root = install_directory
+            .parent()
+            .and_then(Path::parent)
+            .context("répertoire racine Monolith introuvable")?;
+        let setup_path = retroarch_setup_path(install_root)?;
+        let setup_parent = setup_path
+            .parent()
+            .context("dossier de téléchargement RetroArch introuvable")?;
+        fs::create_dir_all(setup_parent)
+            .with_context(|| format!("création de {}", setup_parent.display()))?;
         let temporary = setup_path.with_extension("exe.partial");
         let runtime = tokio::runtime::Runtime::new()?;
         let bytes = runtime.block_on(async {
@@ -117,8 +133,6 @@ fn download_and_start(install_directory: &Path) -> Result<PathBuf> {
         fs::rename(&temporary, &setup_path)
             .with_context(|| format!("publication de {}", setup_path.display()))?;
         Command::new(&setup_path)
-            .arg("/VERYSILENT")
-            .arg("/SUPPRESSMSGBOXES")
             .arg(format!("/DIR={}", install_directory.display()))
             .spawn()
             .with_context(|| "lancement de l’installeur RetroArch")?;
