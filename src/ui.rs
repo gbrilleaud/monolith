@@ -14,6 +14,7 @@ use crate::emulator_launcher::EmulatorLauncher;
 use crate::local_rom::launch_local_rom;
 use crate::models::{GameMetadata, LaunchAvailability, ScanRoot, UserOverride};
 use crate::navigation::{AppView, Navigator};
+use crate::retroarch_installer::{RetroArchInstallState, RetroArchInstaller};
 use crate::sync::SyncEngine;
 use eframe::egui;
 use std::{
@@ -55,6 +56,7 @@ pub struct MonolithApp {
     client_config_path: PathBuf,
     show_connection_settings: bool,
     backend_url_draft: String,
+    retroarch_installer: RetroArchInstaller,
 }
 
 impl MonolithApp {
@@ -101,6 +103,7 @@ impl MonolithApp {
             client_config_path,
             show_connection_settings: false,
             backend_url_draft,
+            retroarch_installer: RetroArchInstaller::new(),
         }
     }
 
@@ -146,6 +149,40 @@ impl MonolithApp {
                     self.notice = Some(format!("Configuration du serveur refusée : {error}"));
                 }
             }
+        }
+    }
+
+    fn install_retroarch(&mut self) {
+        let data_directory = match self.database_path.parent() {
+            Some(directory) => directory,
+            None => {
+                self.notice = Some("Dossier de données client introuvable".into());
+                return;
+            }
+        };
+        let configured_root = std::env::var_os("MONOLITH_INSTALL_ROOT")
+            .map(PathBuf::from)
+            .or_else(|| {
+                crate::client_config::ClientConfig::load_or_default(&self.client_config_path)
+                    .ok()
+                    .and_then(|config| config.install_root.map(PathBuf::from))
+            });
+        let install_root = configured_root.unwrap_or_else(|| {
+            data_directory
+                .parent()
+                .filter(|parent| parent.is_absolute())
+                .map(PathBuf::from)
+                .or_else(|| std::env::current_dir().ok())
+                .unwrap_or_else(|| data_directory.to_path_buf())
+        });
+        match self.retroarch_installer.start(&install_root) {
+            Ok(()) => {
+                self.notice = Some(format!(
+                    "Téléchargement de RetroArch vers {}…",
+                    install_root.join("tools").join("retroarch").display()
+                ));
+            }
+            Err(error) => self.notice = Some(format!("Installation RetroArch refusée : {error}")),
         }
     }
 
@@ -563,6 +600,17 @@ impl eframe::App for MonolithApp {
         self.poll_rom_upload();
         self.poll_inventory_scan();
         self.poll_rom_download();
+        if let Some(state) = self.retroarch_installer.poll() {
+            self.notice = Some(match state {
+                RetroArchInstallState::InstallerStarted(directory) => {
+                    format!("Installeur RetroArch lancé pour {}", directory.display())
+                }
+                RetroArchInstallState::Error(error) => {
+                    format!("Installation RetroArch échouée : {error}")
+                }
+                _ => String::new(),
+            });
+        }
         self.auth.poll();
         self.render_connection_settings(context);
         self.import_remote_cache_for_active_user();
@@ -616,6 +664,16 @@ impl eframe::App for MonolithApp {
                 if ui.button("Paramètres serveur").clicked() {
                     self.backend_url_draft = self.auth.backend_url().into();
                     self.show_connection_settings = true;
+                }
+                if ui.button("Installer RetroArch").clicked() {
+                    self.install_retroarch();
+                }
+                if matches!(
+                    self.retroarch_installer.state(),
+                    RetroArchInstallState::Downloading
+                ) {
+                    ui.spinner();
+                    ui.label("RetroArch…");
                 }
                 match self.auth.state() {
                     AuthState::Authenticated(session) => {
