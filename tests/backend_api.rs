@@ -90,6 +90,33 @@ async fn connector_logs_in_downloads_catalog_and_uploads_override() {
 }
 
 #[tokio::test]
+async fn catalog_refresh_downloads_covers_into_the_client_cache() {
+    let (client, directory) = test_server(Role::Standard).await;
+    let cover = directory.path().join("cover.png");
+    std::fs::write(&cover, b"png bytes").unwrap();
+    let database = Database::open(&directory.path().join("backend.db")).unwrap();
+    database
+        .upsert_game(&GameMetadata {
+            cover_art: Some(cover.display().to_string()),
+            ..game()
+        })
+        .unwrap();
+    let login = client.login_local("alice", "safe-password").await.unwrap();
+    let cache_path = directory.path().join("client/cache.json");
+
+    client
+        .refresh_offline_cache(&login.access_token, &cache_path)
+        .await
+        .unwrap();
+
+    let snapshot: monolith::models::CacheSnapshot =
+        serde_json::from_slice(&std::fs::read(cache_path).unwrap()).unwrap();
+    let cached_cover = snapshot.games[0].cover_art.as_deref().unwrap();
+    assert!(cached_cover.starts_with(directory.path().join("client/covers").to_str().unwrap()));
+    assert_eq!(std::fs::read(cached_cover).unwrap(), b"png bytes");
+}
+
+#[tokio::test]
 async fn read_only_account_can_download_but_not_upload() {
     let (client, _directory) = test_server(Role::ReadOnly).await;
     let login = client.login_local("alice", "safe-password").await.unwrap();

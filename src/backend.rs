@@ -57,6 +57,7 @@ pub fn router(state: BackendState) -> Router {
         .route("/api/v1/auth/login", post(local_login))
         .route("/api/v1/auth/me", get(identity))
         .route("/api/v1/catalog", get(catalog))
+        .route("/api/v1/games/:game_id/cover", get(download_game_cover))
         .route("/api/v1/games/:game_id/rom", get(download_game_rom))
         .route("/api/v1/library/uploads", post(upload_rom))
         .route(
@@ -160,6 +161,45 @@ async fn catalog(
         .build_cache(principal.user_id)
         .map_err(ApiError::internal)?;
     Ok(Json(snapshot))
+}
+
+async fn download_game_cover(
+    State(state): State<BackendState>,
+    headers: HeaderMap,
+    Path(game_id): Path<i64>,
+) -> Result<Response, ApiError> {
+    let principal = authenticate(&state, &headers).await?;
+    let game = state
+        .database()?
+        .build_cache(principal.user_id)
+        .map_err(ApiError::internal)?
+        .games
+        .into_iter()
+        .find(|game| game.game_id == game_id)
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "cover_unavailable"))?;
+    let source = game
+        .cover_art
+        .map(PathBuf::from)
+        .filter(|path| path.is_file())
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "cover_unavailable"))?;
+    let file_name = source
+        .file_name()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.is_empty() && !value.contains(['\r', '\n']))
+        .map(str::to_owned)
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "cover_unavailable"))?;
+    let bytes = std::fs::read(&source)
+        .map_err(|_| ApiError::new(StatusCode::NOT_FOUND, "cover_unavailable"))?;
+    let mut response = Response::new(Body::from(bytes));
+    response.headers_mut().insert(
+        "content-type",
+        HeaderValue::from_static("application/octet-stream"),
+    );
+    response.headers_mut().insert(
+        "x-monolith-file-name",
+        HeaderValue::from_str(&file_name).map_err(ApiError::internal)?,
+    );
+    Ok(response)
 }
 
 async fn download_game_rom(

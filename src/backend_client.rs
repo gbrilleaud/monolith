@@ -109,10 +109,68 @@ impl BackendClient {
         bearer_token: &str,
         cache_path: &Path,
     ) -> Result<usize> {
-        let snapshot = self.fetch_catalog(bearer_token).await?;
+        let mut snapshot = self.fetch_catalog(bearer_token).await?;
+        let covers = cache_path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join("covers");
+        for game in &mut snapshot.games {
+            if game
+                .cover_art
+                .as_deref()
+                .is_some_and(|cover| cover.starts_with("http://") || cover.starts_with("https://"))
+            {
+                continue;
+            }
+            if game.cover_art.is_some() {
+                game.cover_art = self
+                    .download_game_cover(bearer_token, game.game_id, &covers)
+                    .await
+                    .ok()
+                    .map(|path| path.display().to_string());
+            }
+        }
         let games_written = snapshot.games.len();
         write_cache_atomic(cache_path, &snapshot)?;
         Ok(games_written)
+    }
+
+    async fn download_game_cover(
+        &self,
+        bearer_token: &str,
+        game_id: i64,
+        destination_directory: &Path,
+    ) -> Result<PathBuf> {
+        let response = self
+            .http
+            .get(format!("{}/api/v1/games/{game_id}/cover", self.base_url))
+            .bearer_auth(bearer_token)
+            .send()
+            .await
+            .context("backend inaccessible")?
+            .error_for_status()
+            .context("jaquette indisponible")?;
+        let file_name = response
+            .headers()
+            .get("x-monolith-file-name")
+            .and_then(|value| value.to_str().ok())
+            .filter(|value| !value.is_empty() && !value.contains(['/', '\\', '\r', '\n']))
+            .context("nom de jaquette invalide")?;
+        let extension = Path::new(file_name)
+            .extension()
+            .and_then(|value| value.to_str())
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned)
+            .context("extension de jaquette absente")?;
+        let bytes = response.bytes().await.context("lecture de la jaquette")?;
+        if bytes.is_empty() {
+            anyhow::bail!("jaquette vide");
+        }
+        std::fs::create_dir_all(destination_directory)?;
+        let destination = destination_directory.join(format!("{game_id}.{extension}"));
+        let partial = destination_directory.join(format!(".{game_id}.{extension}.partial"));
+        std::fs::write(&partial, &bytes).and_then(|_| std::fs::rename(&partial, &destination))?;
+        Ok(destination)
     }
 
     pub async fn upload_rom(
