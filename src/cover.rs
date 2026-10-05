@@ -12,6 +12,10 @@ pub fn cover_uri(value: &str) -> Result<Option<String>> {
         return Ok(Some(value.to_owned()));
     }
 
+    if is_windows_absolute_path(value) {
+        return Ok(Some(format!("file:///{}", value.replace('\\', "/"))));
+    }
+
     let path = Path::new(value);
     let absolute: PathBuf = if path.is_absolute() {
         path.to_owned()
@@ -21,4 +25,12 @@ pub fn cover_uri(value: &str) -> Result<Option<String>> {
             .join(path)
     };
     Ok(Some(format!("file://{}", absolute.display())))
+}
+
+fn is_windows_absolute_path(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && matches!(bytes[2], b'\\' | b'/')
 }

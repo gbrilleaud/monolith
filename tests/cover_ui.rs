@@ -21,6 +21,14 @@ fn local_cover_path_becomes_an_absolute_file_uri() {
 }
 
 #[test]
+fn windows_cover_path_becomes_a_valid_file_uri() {
+    assert_eq!(
+        cover_uri(r"C:\MONOLITH\data\covers\11002.png").unwrap(),
+        Some("file:///C:/MONOLITH/data/covers/11002.png".into())
+    );
+}
+
+#[test]
 fn empty_cover_reference_has_no_image_source() {
     assert_eq!(cover_uri("   ").unwrap(), None);
 }
