@@ -158,6 +158,16 @@ pub fn retroarch_setup_path(install_root: &Path) -> Result<PathBuf> {
         .join("RetroArch-Win64-setup.exe"))
 }
 
+pub fn elevated_installer_command(setup_path: &Path, install_directory: &Path) -> (String, String) {
+    let quote = |value: String| format!("'{}'", value.replace('\'', "''"));
+    let setup = quote(setup_path.to_string_lossy().into_owned());
+    let arguments = quote(format!("/DIR={}", install_directory.display()));
+    (
+        "powershell.exe".into(),
+        format!("Start-Process -FilePath {setup} -ArgumentList {arguments} -Verb RunAs"),
+    )
+}
+
 fn download_and_extract_xenia(install_directory: &Path) -> Result<PathBuf> {
     #[cfg(not(target_os = "windows"))]
     {
@@ -233,10 +243,11 @@ fn download_and_start(install_directory: &Path, url: &str, setup_name: &str) -> 
             .with_context(|| format!("écriture de {}", temporary.display()))?;
         fs::rename(&temporary, &setup_path)
             .with_context(|| format!("publication de {}", setup_path.display()))?;
-        Command::new(&setup_path)
-            .arg(format!("/DIR={}", install_directory.display()))
+        let (launcher, script) = elevated_installer_command(&setup_path, install_directory);
+        Command::new(launcher)
+            .args(["-NoProfile", "-Command", &script])
             .spawn()
-            .with_context(|| "lancement de l’installeur RetroArch")?;
+            .with_context(|| "demande d’élévation UAC pour l’installeur")?;
         Ok(install_directory.to_path_buf())
     }
 }
