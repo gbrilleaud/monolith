@@ -1,0 +1,128 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  quality:
+    name: Format, lint and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - name: Check formatting
+        run: cargo fmt --check
+      - name: Run Clippy with warnings denied
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+      - name: Run tests
+        run: cargo test --locked
+
+  build-release:
+    name: Package ${{ matrix.label }}
+    needs: quality
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: Linux x86_64
+            package: monolith-linux-x86_64
+          - os: windows-latest
+            label: Windows x86_64
+            package: monolith-windows-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - name: Build all release binaries
+        run: cargo build --locked --release --bins
+      - name: Package Linux release
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          mkdir -p dist/${{ matrix.package }}
+          cp target/release/monolith dist/${{ matrix.package }}/
+          cp target/release/monolith-backend dist/${{ matrix.package }}/
+          cp target/release/monolith-admin dist/${{ matrix.package }}/
+          cp README.md dist/${{ matrix.package }}/
+          mkdir -p dist/${{ matrix.package }}/config
+          cp config/backend.example.toml dist/${{ matrix.package }}/config/
+          cp config/emulators.toml.example dist/${{ matrix.package }}/config/
+          tar -C dist -czf dist/${{ matrix.package }}.tar.gz ${{ matrix.package }}
+          (cd dist && sha256sum ${{ matrix.package }}.tar.gz > ${{ matrix.package }}.tar.gz.sha256)
+      - name: Package Windows release
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $package = "dist/${{ matrix.package }}"
+          New-Item -ItemType Directory -Force -Path $package | Out-Null
+          Copy-Item target/release/monolith.exe $package/
+          Copy-Item target/release/monolith-backend.exe $package/
+          Copy-Item target/release/monolith-admin.exe $package/
+          Copy-Item README.md $package/
+          New-Item -ItemType Directory -Force -Path "$package/config" | Out-Null
+          Copy-Item config/backend.example.toml "$package/config/"
+          Copy-Item config/emulators.toml.example "$package/config/"
+          Compress-Archive -Path $package -DestinationPath "dist/${{ matrix.package }}.zip"
+          $hash = (Get-FileHash "dist/${{ matrix.package }}.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  ${{ matrix.package }}.zip" | Set-Content "dist/${{ matrix.package }}.zip.sha256" -NoNewline
+      - name: Upload release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.package }}
+          path: |
+            dist/${{ matrix.package }}.*
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: build-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download packaged files
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Create release and upload assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload "${{ github.ref_name }}" release-assets/* \
+              --repo "${{ github.repository }}" \
+              --clobber
+          else
+            gh release create "${{ github.ref_name }}" release-assets/* \
+              --repo "${{ github.repository }}" \
+              --title "Monolith ${{ github.ref_name }}" \
+              --generate-notes
+          fi

@@ -42,6 +42,33 @@ cargo test
 cargo build
 ```
 
+## Intégration continue et installations sans Rust
+
+Chaque push sur `main` et chaque pull request déclenchent GitHub Actions : formatage, Clippy strict, tests sous Linux, puis compilation native Linux et Windows. Les binaires clients issus de `main` sont téléchargeables depuis l’onglet **Actions** pendant 14 jours ; ils servent aux validations manuelles avant une version officielle.
+
+Une version distribuable est publiée par un tag Git `vX.Y.Z`. La chaîne vérifie à nouveau formatage, Clippy et tests, fabrique les archives Linux/Windows et les publie avec leurs sommes SHA-256 dans les [Releases GitHub](https://github.com/gbrilleaud/monolith/releases). Les archives ne contiennent ni ROM, ni BIOS, ni firmware, ni contenu commercial.
+
+### Installation Windows depuis une Release
+
+1. Télécharger `monolith-windows-x86_64.zip` et son fichier `.sha256` depuis la Release souhaitée.
+2. Vérifier l’intégrité dans PowerShell :
+
+   ```powershell
+   Get-FileHash .\monolith-windows-x86_64.zip -Algorithm SHA256
+   ```
+
+   Comparer la valeur à celle du fichier `monolith-windows-x86_64.zip.sha256`.
+3. Décompresser l’archive dans `C:\MONOLITH\app\<version>\`.
+4. Conserver les données du client séparément dans `C:\MONOLITH\client-data\` et copier/adapter `config\emulators.toml.example` sous le nom `emulators.toml` dans ce dossier.
+5. Lancer `monolith.exe`. Le compilateur Rust n’est pas requis sur le poste client.
+
+Pour créer une Release :
+
+```bash
+git tag -a v0.1.0 -m "Monolith v0.1.0"
+git push origin v0.1.0
+```
+
 ## Exécution
 
 ```bash
