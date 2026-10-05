@@ -1,6 +1,7 @@
 use monolith::{
     backend_config::BackendConfig,
     client_auth::ClientAuth,
+    client_config::ClientConfig,
     db::Database,
     emulator_launcher::{default_config_path, EmulatorLauncher},
     session_store::SessionStore,
@@ -35,8 +36,19 @@ fn main() -> eframe::Result<()> {
     let emulator_launcher = EmulatorLauncher::load(&emulator_config_path)
         .unwrap_or_else(|error| panic!("configuration émulateurs impossible : {error}"));
 
-    let backend_url =
-        std::env::var("MONOLITH_BACKEND_URL").unwrap_or_else(|_| "http://127.0.0.1:8787".into());
+    let client_config_path = data_dir.join("client.toml");
+    let backend_url = match std::env::var("MONOLITH_BACKEND_URL") {
+        Ok(value) => {
+            ClientConfig::new(value)
+                .expect("MONOLITH_BACKEND_URL invalide")
+                .backend_url
+        }
+        Err(_) => {
+            ClientConfig::load_or_default(&client_config_path)
+                .expect("configuration client invalide")
+                .backend_url
+        }
+    };
     let session_store = SessionStore::new(data_dir.join("session.json"));
     let mut auth = ClientAuth::new(
         backend_url,
@@ -60,6 +72,7 @@ fn main() -> eframe::Result<()> {
                 database_path,
                 library_roots,
                 cache_path,
+                client_config_path,
             )))
         }),
     )

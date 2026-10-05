@@ -78,6 +78,23 @@ impl ClientAuth {
         self.policy_error.as_deref()
     }
 
+    pub fn backend_url(&self) -> &str {
+        &self.backend_url
+    }
+
+    pub fn reconfigure_backend(&mut self, backend_url: impl AsRef<str>) -> Result<()> {
+        let backend_url = crate::client_config::normalize_backend_url(backend_url.as_ref())?;
+        self.store.clear()?;
+        self.backend_url = backend_url;
+        self.receiver = None;
+        self.override_receiver = None;
+        self.policy_receiver = None;
+        self.auth_mode = None;
+        self.policy_error = None;
+        self.state = AuthState::SignedOut;
+        self.probe_policy()
+    }
+
     pub fn probe_policy(&mut self) -> Result<()> {
         if self.policy_receiver.is_some() {
             bail!("détection déjà en cours");

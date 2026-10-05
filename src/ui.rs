@@ -52,6 +52,9 @@ pub struct MonolithApp {
     show_association_backoffice: bool,
     association_search: String,
     selected_rom_path: Option<String>,
+    client_config_path: PathBuf,
+    show_connection_settings: bool,
+    backend_url_draft: String,
 }
 
 impl MonolithApp {
@@ -62,7 +65,9 @@ impl MonolithApp {
         database_path: PathBuf,
         library_roots: Vec<ScanRoot>,
         cache_path: PathBuf,
+        client_config_path: PathBuf,
     ) -> Self {
+        let backend_url_draft = auth.backend_url().into();
         Self {
             db,
             auth,
@@ -93,6 +98,54 @@ impl MonolithApp {
             show_association_backoffice: false,
             association_search: String::new(),
             selected_rom_path: None,
+            client_config_path,
+            show_connection_settings: false,
+            backend_url_draft,
+        }
+    }
+
+    fn render_connection_settings(&mut self, context: &egui::Context) {
+        let mut open = self.show_connection_settings;
+        let mut apply = false;
+        egui::Window::new("Connexion au serveur")
+            .open(&mut open)
+            .resizable(false)
+            .show(context, |ui| {
+                ui.label("URL du backend Monolith");
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.backend_url_draft)
+                        .hint_text("http://192.168.1.39:8788")
+                        .desired_width(360.0),
+                );
+                ui.small(
+                    "Utilisez http:// ou https://. La modification déconnecte la session active.",
+                );
+                ui.small(format!(
+                    "Configuration enregistrée localement : {}",
+                    self.client_config_path.display()
+                ));
+                ui.add_space(8.0);
+                apply = ui.button("Enregistrer et tester").clicked();
+            });
+        self.show_connection_settings = open;
+        if apply {
+            match crate::client_config::ClientConfig::new(&self.backend_url_draft).and_then(
+                |config| {
+                    config.save(&self.client_config_path)?;
+                    self.auth.reconfigure_backend(&config.backend_url)?;
+                    Ok(config)
+                },
+            ) {
+                Ok(config) => {
+                    self.backend_url_draft = config.backend_url;
+                    self.notice =
+                        Some("Serveur enregistré ; vérification de disponibilité en cours".into());
+                    self.show_connection_settings = false;
+                }
+                Err(error) => {
+                    self.notice = Some(format!("Configuration du serveur refusée : {error}"));
+                }
+            }
         }
     }
 
@@ -511,6 +564,7 @@ impl eframe::App for MonolithApp {
         self.poll_inventory_scan();
         self.poll_rom_download();
         self.auth.poll();
+        self.render_connection_settings(context);
         self.import_remote_cache_for_active_user();
         if let Some(result) = self.auth.poll_override_sync() {
             if result.is_ok() {
@@ -559,6 +613,10 @@ impl eframe::App for MonolithApp {
                     self.nav.back();
                 }
                 ui.separator();
+                if ui.button("Paramètres serveur").clicked() {
+                    self.backend_url_draft = self.auth.backend_url().into();
+                    self.show_connection_settings = true;
+                }
                 match self.auth.state() {
                     AuthState::Authenticated(session) => {
                         ui.label(format!("{} · {:?}", session.username, session.role));
@@ -648,6 +706,10 @@ impl MonolithApp {
             ui.add_space(55.0);
             ui.heading(egui::RichText::new("MONOLITH").size(40.0).strong());
             ui.label("Connexion au catalogue · accès hors ligne toujours disponible");
+            if ui.button("Paramètres serveur").clicked() {
+                self.backend_url_draft = self.auth.backend_url().into();
+                self.show_connection_settings = true;
+            }
             ui.add_space(24.0);
 
             if matches!(self.auth.state(), AuthState::Authenticating) {

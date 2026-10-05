@@ -58,9 +58,12 @@ Une version distribuable est publiée par un tag Git `vX.Y.Z`. La chaîne vérif
    ```
 
    Comparer la valeur à celle du fichier `monolith-windows-x86_64.zip.sha256`.
-3. Décompresser l’archive dans `C:\MONOLITH\app\<version>\`.
-4. Conserver les données du client séparément dans `C:\MONOLITH\client-data\` et copier/adapter `config\emulators.toml.example` sous le nom `emulators.toml` dans ce dossier.
-5. Lancer `monolith.exe`. Le compilateur Rust n’est pas requis sur le poste client.
+3. Décompresser l’archive dans `C:\\MONOLITH\\app\\<version>\\`.
+4. Créer `C:\\MONOLITH\\client-data\\`, puis copier/adapter `config\\emulators.toml.example` sous le nom `emulators.toml` dans ce dossier si le lancement d’émulateur est requis.
+5. Lancer `monolith.exe`, puis ouvrir **Paramètres serveur** sur l’écran de connexion et saisir l’URL du backend, par exemple `http://192.168.1.39:8788` pour le serveur Monolith du réseau local. Cette valeur est conservée dans `C:\\MONOLITH\\client-data\\client.toml`.
+6. Lancer `monolith.exe`. Le compilateur Rust n’est pas requis sur le poste client.
+
+Le paramètre Windows `MONOLITH_DATA_DIR=C:\\MONOLITH\\client-data` peut être défini dans le raccourci ou le script de lancement. `MONOLITH_BACKEND_URL` reste accepté en priorité pour un déploiement administré, mais l’écran **Paramètres serveur** évite d’avoir à modifier des variables d’environnement pour l’usage courant.
 
 Pour créer une Release :
 

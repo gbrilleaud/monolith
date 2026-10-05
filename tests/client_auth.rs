@@ -40,6 +40,27 @@ fn unexpired_session_is_restored_without_network_access() {
 }
 
 #[test]
+fn backend_reconfiguration_discards_the_previous_session_and_starts_a_new_probe() {
+    let directory = tempdir().unwrap();
+    let store = SessionStore::new(directory.path().join("session.json"));
+    store.save(&session()).unwrap();
+    let mut auth = ClientAuth::new(
+        "http://127.0.0.1:8787",
+        store.clone(),
+        directory.path().join("cache.json"),
+        1_000,
+    )
+    .unwrap();
+
+    auth.reconfigure_backend("http://192.168.1.39:8788")
+        .unwrap();
+
+    assert_eq!(auth.state(), &AuthState::SignedOut);
+    assert!(auth.auth_mode().is_none());
+    assert!(!store.path().exists());
+}
+
+#[test]
 fn logout_clears_memory_and_persisted_session() {
     let directory = tempdir().unwrap();
     let store = SessionStore::new(directory.path().join("session.json"));
