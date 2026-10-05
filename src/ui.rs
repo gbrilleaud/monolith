@@ -14,7 +14,10 @@ use crate::emulator_launcher::EmulatorLauncher;
 use crate::local_rom::launch_local_rom;
 use crate::models::{GameMetadata, LaunchAvailability, ScanRoot, UserOverride};
 use crate::navigation::{AppView, Navigator};
-use crate::retroarch_installer::{RetroArchInstallState, RetroArchInstaller};
+use crate::retroarch_installer::{
+    RetroArchInstallState, RetroArchInstaller, PCSX2_WINDOWS_X64_SETUP_URL,
+    XENIA_CANARY_WINDOWS_X64_ARCHIVE_URL,
+};
 use crate::sync::SyncEngine;
 use eframe::egui;
 use std::{
@@ -667,6 +670,14 @@ impl eframe::App for MonolithApp {
                 }
                 if ui.button("Installer RetroArch").clicked() {
                     self.install_retroarch();
+                }
+                if ui.button("Télécharger PCSX2 2.8.0").clicked() {
+                    ui.ctx()
+                        .open_url(egui::OpenUrl::new_tab(PCSX2_WINDOWS_X64_SETUP_URL));
+                }
+                if ui.button("Télécharger Xenia Canary").clicked() {
+                    ui.ctx()
+                        .open_url(egui::OpenUrl::new_tab(XENIA_CANARY_WINDOWS_X64_ARCHIVE_URL));
                 }
                 if matches!(
                     self.retroarch_installer.state(),

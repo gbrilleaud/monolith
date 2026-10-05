@@ -11,6 +11,10 @@ use std::{
 
 pub const RETROARCH_WINDOWS_X64_SETUP_URL: &str =
     "https://buildbot.libretro.com/stable/1.20.0/windows/x86_64/RetroArch-Win64-setup.exe";
+pub const PCSX2_WINDOWS_X64_SETUP_URL: &str =
+    "https://github.com/PCSX2/pcsx2/releases/download/v2.8.0/PCSX2-v2.8.0-windows-x64-installer.exe";
+pub const XENIA_CANARY_WINDOWS_X64_ARCHIVE_URL: &str =
+    "https://github.com/xenia-canary/xenia-canary/releases/latest/download/xenia_canary_windows.7z";
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum RetroArchInstallState {
