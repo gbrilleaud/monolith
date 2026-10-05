@@ -66,6 +66,22 @@ impl RetroArchInstaller {
         )
     }
 
+    pub fn start_xenia(&mut self, install_root: impl AsRef<Path>) -> Result<()> {
+        if self.receiver.is_some() {
+            bail!("téléchargement d’émulateur déjà en cours");
+        }
+        let install_directory = xenia_install_directory(install_root.as_ref())?;
+        let (sender, receiver) = mpsc::channel();
+        thread::spawn(move || {
+            let result = download_and_extract_xenia(&install_directory)
+                .map_err(|error| format!("{error:#}"));
+            let _ = sender.send(result);
+        });
+        self.receiver = Some(receiver);
+        self.state = RetroArchInstallState::Downloading;
+        Ok(())
+    }
+
     fn start_download(
         &mut self,
         install_root: &Path,
@@ -126,6 +142,13 @@ pub fn pcsx2_install_directory(install_root: &Path) -> Result<PathBuf> {
     Ok(install_root.join("tools").join("pcsx2"))
 }
 
+pub fn xenia_install_directory(install_root: &Path) -> Result<PathBuf> {
+    if !install_root.is_absolute() {
+        bail!("le répertoire d’installation Monolith doit être absolu");
+    }
+    Ok(install_root.join("tools").join("xenia"))
+}
+
 pub fn retroarch_setup_path(install_root: &Path) -> Result<PathBuf> {
     if !install_root.is_absolute() {
         bail!("le répertoire d’installation Monolith doit être absolu");
@@ -133,6 +156,54 @@ pub fn retroarch_setup_path(install_root: &Path) -> Result<PathBuf> {
     Ok(install_root
         .join("downloads")
         .join("RetroArch-Win64-setup.exe"))
+}
+
+fn download_and_extract_xenia(install_directory: &Path) -> Result<PathBuf> {
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = install_directory;
+        bail!("l’extraction automatique de Xenia est disponible uniquement sous Windows");
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let install_root = install_directory
+            .parent()
+            .and_then(Path::parent)
+            .context("répertoire racine Monolith introuvable")?;
+        let archive_path = install_root
+            .join("downloads")
+            .join("xenia_canary_windows.7z");
+        let parent = archive_path
+            .parent()
+            .context("dossier de téléchargement Xenia introuvable")?;
+        fs::create_dir_all(parent)?;
+        let temporary = archive_path.with_extension("7z.partial");
+        let runtime = tokio::runtime::Runtime::new()?;
+        let bytes = runtime.block_on(async {
+            reqwest::get(XENIA_CANARY_WINDOWS_X64_ARCHIVE_URL)
+                .await?
+                .error_for_status()?
+                .bytes()
+                .await
+        })?;
+        fs::write(&temporary, &bytes)?;
+        fs::rename(&temporary, &archive_path)?;
+        fs::create_dir_all(install_directory)?;
+        let status = Command::new("tar.exe")
+            .args([
+                "-xf",
+                &archive_path.to_string_lossy(),
+                "-C",
+                &install_directory.to_string_lossy(),
+            ])
+            .status()
+            .context("lancement de tar.exe pour Xenia")?;
+        if !status.success() || !install_directory.join("xenia_canary.exe").is_file() {
+            bail!("extraction Xenia échouée : Windows 11 récent avec prise en charge .7z requis");
+        }
+        Ok(install_directory.to_path_buf())
+    }
 }
 
 fn download_and_start(install_directory: &Path, url: &str, setup_name: &str) -> Result<PathBuf> {

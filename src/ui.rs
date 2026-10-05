@@ -14,9 +14,7 @@ use crate::emulator_launcher::EmulatorLauncher;
 use crate::local_rom::launch_local_rom;
 use crate::models::{GameMetadata, LaunchAvailability, ScanRoot, UserOverride};
 use crate::navigation::{AppView, Navigator};
-use crate::retroarch_installer::{
-    RetroArchInstallState, RetroArchInstaller, XENIA_CANARY_WINDOWS_X64_ARCHIVE_URL,
-};
+use crate::retroarch_installer::{RetroArchInstallState, RetroArchInstaller};
 use crate::sync::SyncEngine;
 use eframe::egui;
 use std::{
@@ -219,6 +217,37 @@ impl MonolithApp {
                 ))
             }
             Err(error) => self.notice = Some(format!("Installation PCSX2 refusée : {error}")),
+        }
+    }
+
+    fn install_xenia(&mut self) {
+        let Some(data_directory) = self.database_path.parent() else {
+            self.notice = Some("Dossier de données client introuvable".into());
+            return;
+        };
+        let install_root = std::env::var_os("MONOLITH_INSTALL_ROOT")
+            .map(PathBuf::from)
+            .or_else(|| {
+                crate::client_config::ClientConfig::load_or_default(&self.client_config_path)
+                    .ok()
+                    .and_then(|c| c.install_root.map(PathBuf::from))
+            })
+            .unwrap_or_else(|| {
+                data_directory
+                    .parent()
+                    .filter(|p| p.is_absolute())
+                    .map(PathBuf::from)
+                    .or_else(|| std::env::current_dir().ok())
+                    .unwrap_or_else(|| data_directory.to_path_buf())
+            });
+        match self.retroarch_installer.start_xenia(&install_root) {
+            Ok(()) => {
+                self.notice = Some(format!(
+                    "Téléchargement et extraction de Xenia vers {}…",
+                    install_root.join("tools").join("xenia").display()
+                ))
+            }
+            Err(error) => self.notice = Some(format!("Installation Xenia refusée : {error}")),
         }
     }
 
@@ -707,9 +736,8 @@ impl eframe::App for MonolithApp {
                 if ui.button("Installer PCSX2 2.8.0").clicked() {
                     self.install_pcsx2();
                 }
-                if ui.button("Télécharger Xenia Canary").clicked() {
-                    ui.ctx()
-                        .open_url(egui::OpenUrl::new_tab(XENIA_CANARY_WINDOWS_X64_ARCHIVE_URL));
+                if ui.button("Installer Xenia Canary").clicked() {
+                    self.install_xenia();
                 }
                 if matches!(
                     self.retroarch_installer.state(),
@@ -991,32 +1019,46 @@ impl MonolithApp {
     }
 
     fn render_catalog_tiles(&mut self, ui: &mut egui::Ui, rows: &[CatalogRow]) {
+        const TILE_WIDTH: f32 = 180.0;
+        const TILE_HEIGHT: f32 = 220.0;
+        const COVER_SIZE: egui::Vec2 = egui::vec2(168.0, 126.0);
+        const TITLE_HEIGHT: f32 = 36.0;
+
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
                 for row in rows {
-                    ui.group(|ui| {
-                        ui.set_width(180.0);
-                        if let Some(response) =
-                            render_cover(ui, row.cover_art.as_deref(), egui::vec2(168.0, 126.0))
-                        {
-                            if response.interact(egui::Sense::click()).clicked() {
-                                if let Some(game_id) = row.game_id {
-                                    self.nav.open_details(game_id);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(TILE_WIDTH, TILE_HEIGHT),
+                        egui::Layout::top_down(egui::Align::Center),
+                        |ui| {
+                            ui.group(|ui| {
+                                ui.set_min_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT));
+                                if let Some(response) =
+                                    render_cover(ui, row.cover_art.as_deref(), COVER_SIZE)
+                                {
+                                    if response.interact(egui::Sense::click()).clicked() {
+                                        if let Some(game_id) = row.game_id {
+                                            self.nav.open_details(game_id);
+                                        }
+                                    }
                                 }
-                            }
-                        }
-                        ui.label(&row.title);
-                        if let Some(game_id) = row.game_id {
-                            if ui.button("Ouvrir").clicked() {
-                                self.nav.open_details(game_id);
-                            }
-                        } else {
-                            ui.label("ROM locale inconnue");
-                            if ui.button("Lancer localement").clicked() {
-                                self.launch_unknown_local_row(row);
-                            }
-                        }
-                    });
+                                ui.add_sized(
+                                    egui::vec2(COVER_SIZE.x, TITLE_HEIGHT),
+                                    egui::Label::new(&row.title).wrap(),
+                                );
+                                if let Some(game_id) = row.game_id {
+                                    if ui.button("Ouvrir").clicked() {
+                                        self.nav.open_details(game_id);
+                                    }
+                                } else {
+                                    ui.label("ROM locale inconnue");
+                                    if ui.button("Lancer localement").clicked() {
+                                        self.launch_unknown_local_row(row);
+                                    }
+                                }
+                            });
+                        },
+                    );
                 }
             });
         });

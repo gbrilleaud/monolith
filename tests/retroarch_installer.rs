@@ -1,5 +1,6 @@
 use monolith::retroarch_installer::{
     pcsx2_install_directory, retroarch_install_directory, retroarch_setup_path,
+    xenia_install_directory,
 };
 use std::path::Path;
 
@@ -24,6 +25,14 @@ fn pcsx2_is_installed_under_the_selected_monolith_root() {
     assert_eq!(
         pcsx2_install_directory(Path::new("/opt/MONOLITH")).unwrap(),
         Path::new("/opt/MONOLITH/tools/pcsx2")
+    );
+}
+
+#[test]
+fn xenia_is_extracted_under_the_selected_monolith_root() {
+    assert_eq!(
+        xenia_install_directory(Path::new("/opt/MONOLITH")).unwrap(),
+        Path::new("/opt/MONOLITH/tools/xenia")
     );
 }
 
