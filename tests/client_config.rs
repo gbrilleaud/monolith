@@ -16,6 +16,24 @@ fn config_persists_a_normalized_backend_url_without_trailing_slash() {
 }
 
 #[test]
+fn config_persists_an_absolute_install_root() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("client.toml");
+    let install_root = directory.path().join("MONOLITH");
+    let config = ClientConfig::new("http://127.0.0.1:8787")
+        .unwrap()
+        .with_install_root(&install_root)
+        .unwrap();
+
+    config.save(&path).unwrap();
+
+    assert_eq!(
+        ClientConfig::load_or_default(&path).unwrap().install_root,
+        Some(install_root.display().to_string())
+    );
+}
+
+#[test]
 fn config_rejects_a_backend_url_without_http_scheme() {
     assert!(ClientConfig::new("192.168.1.39:8788").is_err());
 }
