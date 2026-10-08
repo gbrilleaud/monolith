@@ -20,4 +20,5 @@ pub mod retroarch_installer;
 pub mod rom_bundle;
 pub mod session_store;
 pub mod sync;
+pub mod theme;
 pub mod ui;

@@ -65,6 +65,7 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(move |creation_context| {
             egui_extras::install_image_loaders(&creation_context.egui_ctx);
+            monolith::theme::install(&creation_context.egui_ctx);
             Ok(Box::new(MonolithApp::new(
                 database,
                 auth,

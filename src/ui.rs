@@ -1019,10 +1019,10 @@ impl MonolithApp {
     }
 
     fn render_catalog_tiles(&mut self, ui: &mut egui::Ui, rows: &[CatalogRow]) {
-        const TILE_WIDTH: f32 = 180.0;
-        const TILE_HEIGHT: f32 = 220.0;
-        const COVER_SIZE: egui::Vec2 = egui::vec2(168.0, 126.0);
-        const TITLE_HEIGHT: f32 = 36.0;
+        const TILE_WIDTH: f32 = 204.0;
+        const TILE_HEIGHT: f32 = 292.0;
+        const COVER_SIZE: egui::Vec2 = egui::vec2(188.0, 190.0);
+        const TITLE_HEIGHT: f32 = 38.0;
 
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
@@ -1031,8 +1031,8 @@ impl MonolithApp {
                         egui::vec2(TILE_WIDTH, TILE_HEIGHT),
                         egui::Layout::top_down(egui::Align::Center),
                         |ui| {
-                            ui.group(|ui| {
-                                ui.set_min_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT));
+                            crate::theme::card_frame().show(ui, |ui| {
+                                ui.set_min_size(egui::vec2(TILE_WIDTH - 16.0, TILE_HEIGHT - 16.0));
                                 if let Some(response) =
                                     render_cover(ui, row.cover_art.as_deref(), COVER_SIZE)
                                 {
@@ -1047,11 +1047,11 @@ impl MonolithApp {
                                     egui::Label::new(&row.title).wrap(),
                                 );
                                 if let Some(game_id) = row.game_id {
-                                    if ui.button("Ouvrir").clicked() {
+                                    if ui.button("Voir la fiche").clicked() {
                                         self.nav.open_details(game_id);
                                     }
                                 } else {
-                                    ui.label("ROM locale inconnue");
+                                    crate::theme::muted(ui, "ROM locale inconnue");
                                     if ui.button("Lancer localement").clicked() {
                                         self.launch_unknown_local_row(row);
                                     }
@@ -1419,22 +1419,21 @@ fn render_cover(
     reference: Option<&str>,
     size: egui::Vec2,
 ) -> Option<egui::Response> {
-    let Some(reference) = reference else {
-        ui.label("Jaquette absente");
-        return None;
-    };
-    match cover_uri(reference) {
-        Ok(Some(uri)) => Some(ui.add(egui::Image::new(uri).fit_to_exact_size(size))),
-        Ok(None) => {
-            ui.label("Jaquette absente");
-            None
-        }
-        Err(error) => {
-            ui.colored_label(
-                egui::Color32::LIGHT_RED,
-                format!("Jaquette invalide : {error}"),
+    let response = match reference.and_then(|value| cover_uri(value).ok().flatten()) {
+        Some(uri) => ui.add(egui::Image::new(uri).fit_to_exact_size(size)),
+        None => {
+            let (rect, response) = ui.allocate_exact_size(size, egui::Sense::hover());
+            ui.painter()
+                .rect_filled(rect, 8.0, crate::theme::SURFACE_RAISED);
+            ui.painter().text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "JAQUETTE\nINDISPONIBLE",
+                egui::TextStyle::Small.resolve(ui.style()),
+                crate::theme::TEXT_MUTED,
             );
-            None
+            response
         }
-    }
+    };
+    Some(response)
 }
