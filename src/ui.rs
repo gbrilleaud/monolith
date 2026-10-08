@@ -939,29 +939,70 @@ impl MonolithApp {
     }
 
     fn render_systems(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Consoles");
-        ui.add_space(12.0);
-        match self.db.systems() {
-            Ok(systems) if systems.is_empty() => {
-                ui.label("Aucune console. Le catalogue attend sa première synchronisation.");
-            }
-            Ok(systems) => {
-                ui.horizontal_wrapped(|ui| {
-                    for system in systems {
-                        let label = format!("{}\n{} jeu(x)", system.name, system.game_count);
-                        if ui
-                            .add_sized([180.0, 90.0], egui::Button::new(label))
-                            .clicked()
-                        {
-                            self.nav.open_catalog(system.system_id);
-                        }
-                    }
-                });
-            }
+        let Some(user_id) = self.active_user_id() else {
+            return;
+        };
+        let systems = match self.db.systems() {
+            Ok(systems) => systems,
             Err(error) => {
                 ui.colored_label(egui::Color32::RED, format!("SQLite : {error}"));
+                return;
             }
+        };
+        let games = match self.db.resolved_games(user_id) {
+            Ok(games) => games,
+            Err(error) => {
+                ui.colored_label(egui::Color32::RED, format!("Catalogue : {error}"));
+                return;
+            }
+        };
+        let unlinked = self.db.unlinked_rom_locations().unwrap_or_default();
+
+        ui.heading("Bibliothèque");
+        ui.add(
+            egui::TextEdit::singleline(&mut self.search)
+                .hint_text("Rechercher dans toute la bibliothèque (* et ? acceptés)…")
+                .desired_width(f32::INFINITY),
+        );
+        ui.add_space(8.0);
+        if systems.is_empty() {
+            crate::theme::muted(ui, "La bibliothèque attend sa première synchronisation.");
+            return;
         }
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            for system in systems {
+                let mut rows = games
+                    .iter()
+                    .filter(|game| game.system_id == system.system_id)
+                    .cloned()
+                    .map(catalog_row_for_game)
+                    .collect::<Vec<_>>();
+                rows.extend(
+                    unlinked
+                        .iter()
+                        .filter(|location| location.system_id == system.system_id)
+                        .cloned()
+                        .map(catalog_row_for_local_rom),
+                );
+                let rows = filter_and_sort_catalog_rows(&rows, &self.search, self.catalog_sort);
+                let heading = format!("{}  ·  {} ROM(s)", system.name, rows.len());
+                crate::theme::card_frame().show(ui, |ui| {
+                    egui::CollapsingHeader::new(heading)
+                        .id_source(("library-system", system.system_id))
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            ui.add_space(6.0);
+                            if rows.is_empty() {
+                                crate::theme::muted(ui, "Aucun jeu ne correspond à la recherche.");
+                            } else {
+                                self.render_catalog_tiles(ui, &rows);
+                            }
+                            ui.add_space(4.0);
+                        });
+                });
+                ui.add_space(8.0);
+            }
+        });
     }
 
     fn render_catalog(&mut self, ui: &mut egui::Ui, system_id: i64) {
@@ -1024,43 +1065,41 @@ impl MonolithApp {
         const COVER_SIZE: egui::Vec2 = egui::vec2(188.0, 190.0);
         const TITLE_HEIGHT: f32 = 38.0;
 
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                for row in rows {
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(TILE_WIDTH, TILE_HEIGHT),
-                        egui::Layout::top_down(egui::Align::Center),
-                        |ui| {
-                            crate::theme::card_frame().show(ui, |ui| {
-                                ui.set_min_size(egui::vec2(TILE_WIDTH - 16.0, TILE_HEIGHT - 16.0));
-                                if let Some(response) =
-                                    render_cover(ui, row.cover_art.as_deref(), COVER_SIZE)
-                                {
-                                    if response.interact(egui::Sense::click()).clicked() {
-                                        if let Some(game_id) = row.game_id {
-                                            self.nav.open_details(game_id);
-                                        }
-                                    }
-                                }
-                                ui.add_sized(
-                                    egui::vec2(COVER_SIZE.x, TITLE_HEIGHT),
-                                    egui::Label::new(&row.title).wrap(),
-                                );
-                                if let Some(game_id) = row.game_id {
-                                    if ui.button("Voir la fiche").clicked() {
+        ui.horizontal_wrapped(|ui| {
+            for row in rows {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(TILE_WIDTH, TILE_HEIGHT),
+                    egui::Layout::top_down(egui::Align::Center),
+                    |ui| {
+                        crate::theme::card_frame().show(ui, |ui| {
+                            ui.set_min_size(egui::vec2(TILE_WIDTH - 16.0, TILE_HEIGHT - 16.0));
+                            if let Some(response) =
+                                render_cover(ui, row.cover_art.as_deref(), COVER_SIZE)
+                            {
+                                if response.interact(egui::Sense::click()).clicked() {
+                                    if let Some(game_id) = row.game_id {
                                         self.nav.open_details(game_id);
                                     }
-                                } else {
-                                    crate::theme::muted(ui, "ROM locale inconnue");
-                                    if ui.button("Lancer localement").clicked() {
-                                        self.launch_unknown_local_row(row);
-                                    }
                                 }
-                            });
-                        },
-                    );
-                }
-            });
+                            }
+                            ui.add_sized(
+                                egui::vec2(COVER_SIZE.x, TITLE_HEIGHT),
+                                egui::Label::new(&row.title).wrap(),
+                            );
+                            if let Some(game_id) = row.game_id {
+                                if ui.button("Voir la fiche").clicked() {
+                                    self.nav.open_details(game_id);
+                                }
+                            } else {
+                                crate::theme::muted(ui, "ROM locale inconnue");
+                                if ui.button("Lancer localement").clicked() {
+                                    self.launch_unknown_local_row(row);
+                                }
+                            }
+                        });
+                    },
+                );
+            }
         });
     }
 
