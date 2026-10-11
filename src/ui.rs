@@ -11,6 +11,7 @@ use crate::client_rom_upload::{ClientRomUpload, RomUploadState};
 use crate::cover::cover_uri;
 use crate::db::Database;
 use crate::emulator_launcher::EmulatorLauncher;
+use crate::library_service::{catalog_row_for_game, catalog_row_for_local_rom};
 use crate::local_rom::launch_local_rom;
 use crate::models::{GameMetadata, LaunchAvailability, ScanRoot, UserOverride};
 use crate::navigation::{AppView, Navigator};
@@ -1444,65 +1445,6 @@ pub fn availability_label(availability: &LaunchAvailability) -> String {
         )
     } else {
         "Absent de la bibliothèque".into()
-    }
-}
-
-fn catalog_row_for_game(game: GameMetadata) -> CatalogRow {
-    let path = game
-        .launch_availability
-        .preferred_path
-        .clone()
-        .unwrap_or_default();
-    let file_name = std::path::Path::new(&path)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or(&game.title)
-        .to_owned();
-    let extension = std::path::Path::new(&path)
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    CatalogRow {
-        system_id: game.system_id,
-        title: game.title,
-        file_name,
-        path,
-        extension,
-        favourite: false,
-        added_at: String::new(),
-        size_bytes: 0,
-        rating: None,
-        available: game.launch_availability.available,
-        cover_art: game.cover_art,
-        game_id: Some(game.game_id),
-    }
-}
-
-fn catalog_row_for_local_rom(location: crate::models::RomLocation) -> CatalogRow {
-    let file_name = std::path::Path::new(&location.path)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or(&location.path)
-        .to_owned();
-    let title = std::path::Path::new(&file_name)
-        .file_stem()
-        .and_then(|name| name.to_str())
-        .unwrap_or(&file_name)
-        .to_owned();
-    CatalogRow {
-        system_id: location.system_id,
-        title,
-        file_name,
-        path: location.path,
-        extension: location.extension,
-        favourite: false,
-        added_at: location.last_seen_at,
-        size_bytes: location.size_bytes,
-        rating: None,
-        available: location.availability == crate::models::RomAvailability::Available,
-        cover_art: None,
-        game_id: location.game_id,
     }
 }
 

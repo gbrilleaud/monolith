@@ -1,6 +1,6 @@
 # Monolith
 
-Client de bibliothèque de jeux en **Rust + egui**, conçu selon une architecture **Local-First**.
+Client de bibliothèque de jeux en **Rust**, conçu selon une architecture **Local-First**. L’interface egui reste la version distribuée ; une migration progressive vers **Flutter + flutter_rust_bridge** est en cours pour la bibliothèque. Voir [architecture, démarrage, validations et limites mobiles](docs/FLUTTER_MIGRATION.md).
 
 ## État du prototype
 

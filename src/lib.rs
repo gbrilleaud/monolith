@@ -13,7 +13,10 @@ pub mod client_update;
 pub mod cover;
 pub mod db;
 pub mod emulator_launcher;
+pub mod flutter_api;
+mod frb_generated; /* AUTO INJECTED BY flutter_rust_bridge. This line may not be accurate, and you can change it according to your needs. */
 pub mod inventory;
+pub mod library_service;
 pub mod local_rom;
 pub mod models;
 pub mod navigation;

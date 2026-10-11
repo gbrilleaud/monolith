@@ -1,0 +1,4 @@
+rust_input: crate::flutter_api
+rust_root: ../
+dart_output: lib/src/rust
+# Les modèles DTO proviennent de library_service, sans réimplémentation Dart.

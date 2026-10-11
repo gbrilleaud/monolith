@@ -1,0 +1,91 @@
+# Migration incrémentale Rust → Flutter (FRB)
+
+## Architecture et périmètre
+
+Une seule logique métier : `db`, `catalog_query`, `cover`, `local_rom`,
+`emulator_launcher`, authentification, synchronisation, backend et configuration
+restent dans le crate Rust `monolith`. `src/library_service.rs` compose les DTO
+de bibliothèque et résout les ROMs enregistrées dans SQLite ; l'ancien écran egui
+utilise les mêmes conversions de catalogue. `src/flutter_api.rs` expose ces
+services à Flutter via `flutter_rust_bridge` 2.13.0. Les bindings dans
+`src/frb_generated.rs` et `flutter_app/lib/src/rust/` sont générés, non édités
+manuellement. Dart ne stocke aucune règle de catalogue, aucun SQL et aucune
+commande d'émulateur.
+
+La première tranche Flutter offre : bibliothèque hors ligne, recherche wildcard
+déléguée à Rust, sections horizontales animées, jaquettes HTTP(S) ou `file://`,
+tuiles homogènes adaptatives, lancement depuis une ROM inscrite et disponible
+dans SQLite. Le lancement est exécuté par Rust, sans shell. Sans backend ni NAS,
+les données déjà présentes localement restent consultables. Le client egui et la
+chaîne officielle de release restent en place jusqu'à parité fonctionnelle et
+validation native ; **ne pas remplacer la release egui par l'artefact Flutter
+pour l'instant**.
+
+## Exécution et génération
+
+Installer Flutter 3.47.7, Rust stable, et les dépendances natives Flutter de
+l'OS. Depuis la racine du dépôt :
+
+```bash
+cargo test --locked
+cd flutter_app
+flutter pub get
+flutter analyze
+flutter test
+flutter run -d linux      # ou -d windows
+flutter build linux --release    # ou windows
+```
+
+Sur Linux : `clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev`.
+Cargokit compile le crate Rust du dépôt et joint `libmonolith` au bundle Flutter.
+Conserver **tout le dossier** du bundle (pas seulement l'exécutable).
+Les fichiers `rust_builder` et les bindings sont versionnés ; pas de second crate
+Rust contenant la logique métier.
+
+Après modification de `src/flutter_api.rs` ou des DTO FRB :
+
+```bash
+cargo install --locked flutter_rust_bridge_codegen --version 2.13.0
+cd flutter_app
+flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml
+flutter analyze && flutter test
+```
+
+La génération nécessite aussi `cargo-expand` (le codegen l'installe si absent).
+Le répertoire de données est `data/monolith.db`, **relatif au répertoire de
+travail** du processus, comme dans le client egui ; utiliser le même répertoire
+de travail pour conserver le catalogue. Sinon lancer Flutter avec
+`MONOLITH_DATA_DIR` pointant sur un dossier déjà peuplé, par exemple
+`C:\MONOLITH\data` sous Windows. Ne pas copier ou recréer une base privée dans le
+dépôt. Les profils d'émulateurs sont résolus par Rust sous ce même dossier.
+
+## Limites avant remplacement d'egui
+
+- Flutter n'expose pour l'instant que la bibliothèque locale du profil `user_id=1`
+  et le lancement ; connexion/SSO, gestion des comptes, uploads, associations,
+  édition, synchronisation et mises à jour restent dans egui. Il n'y a pas encore
+  de parité fonctionnelle. Les téléchargements de jaquettes privés requièrent
+  des fichiers déjà synchronisés localement ou des URL accessibles.
+- Les adaptateurs d'émulateur existants servent Windows et Linux. La présence
+  d'un profil et d'une ROM locale est requise. Le lancement n'a été testé ici
+  que par résolution de commande, pas avec un émulateur réellement installé.
+- **Android** : le projet Flutter Android est généré, mais le crate Rust complet
+  et le pont natif ne sont pas validés par une compilation Android ; aucun Android
+  SDK n'est présent sur cette machine. Un adaptateur dédié doit convertir les
+  URI `content://`/SAF vers les droits d'accès applicatifs et interagir avec
+  des émulateurs installés via intents explicites. Les chemins de fichiers PC et
+  la bibliothèque NAS ne sont pas directement accessibles.
+- **iOS** : le projet Flutter iOS est généré, mais la compilation requiert macOS,
+  Xcode et CocoaPods ; elle n'est pas validée. Le bac à sable et les permissions
+  iOS imposent un stockage et des imports dédiés. Le lancement d'autres apps
+  exige des URL schemes déclarés et supportés par ces apps : **aucun lancement
+  d'émulateur iOS n'est actuellement promis**.
+- Navigation tactile et disposition PC/tablette/smartphone sont implémentées au
+  niveau Flutter. Navigation par clavier/focus de boutons possible ; une manette
+  Xbox 360 réelle, le DPI et la qualité graphique sur appareils natifs doivent
+  encore être vérifiés. Les jaquettes locales `file://` dépendent des permissions
+  du processus Flutter.
+
+La CI `.github/workflows/flutter.yml` analyse/teste Dart et construit des bundles
+Windows/Linux séparés des archives officielles egui. Les builds mobiles et les
+tests sur matériel réel restent une étape ultérieure.
