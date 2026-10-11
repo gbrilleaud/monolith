@@ -57,6 +57,7 @@ pub struct MonolithApp {
     show_connection_settings: bool,
     backend_url_draft: String,
     retroarch_installer: RetroArchInstaller,
+    client_update: crate::client_update::ClientUpdate,
 }
 
 impl MonolithApp {
@@ -70,6 +71,15 @@ impl MonolithApp {
         client_config_path: PathBuf,
     ) -> Self {
         let backend_url_draft = auth.backend_url().into();
+        let update_data_dir = client_config_path
+            .parent()
+            .unwrap_or(std::path::Path::new("data"))
+            .to_path_buf();
+        let update_error_path = update_data_dir.join("updates/installation-error.txt");
+        let update_notice = std::fs::read_to_string(&update_error_path).ok();
+        if update_notice.is_some() {
+            let _ = std::fs::remove_file(update_error_path);
+        }
         Self {
             db,
             auth,
@@ -82,7 +92,7 @@ impl MonolithApp {
             edit_description: String::new(),
             edit_cover: String::new(),
             cover_picker: None,
-            notice: None,
+            notice: update_notice,
             database_path,
             library_roots,
             inventory: None,
@@ -104,6 +114,7 @@ impl MonolithApp {
             show_connection_settings: false,
             backend_url_draft,
             retroarch_installer: RetroArchInstaller::new(),
+            client_update: crate::client_update::ClientUpdate::new(update_data_dir),
         }
     }
 
@@ -658,6 +669,48 @@ impl MonolithApp {
     }
 }
 
+impl MonolithApp {
+    fn render_update_control(&mut self, ui: &mut egui::Ui) {
+        use crate::client_update::UpdateState;
+        match self.client_update.state().clone() {
+            UpdateState::Available(release) => {
+                if ui
+                    .button(format!(
+                        "Nouvelle version disponible · v{}",
+                        release.version
+                    ))
+                    .clicked()
+                {
+                    if let Err(error) = self.client_update.download() {
+                        self.notice = Some(format!("Mise à jour : {error}"));
+                    }
+                }
+            }
+            UpdateState::Ready(_) => {
+                if ui.button("Installer et redémarrer Monolith").clicked() {
+                    match self.client_update.install() {
+                        Ok(()) => ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close),
+                        Err(error) => {
+                            self.notice = Some(format!("Installation impossible : {error}"))
+                        }
+                    }
+                }
+            }
+            UpdateState::Downloading => {
+                ui.spinner();
+                ui.label("Téléchargement de la mise à jour…");
+            }
+            UpdateState::Checking | UpdateState::Unavailable => {}
+            UpdateState::Error(error) => {
+                ui.colored_label(egui::Color32::LIGHT_RED, format!("Mise à jour : {error}"));
+                if ui.button("Réessayer").clicked() {
+                    self.client_update.check();
+                }
+            }
+        }
+    }
+}
+
 impl eframe::App for MonolithApp {
     fn update(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_cover_picker();
@@ -665,6 +718,10 @@ impl eframe::App for MonolithApp {
         self.poll_rom_upload();
         self.poll_inventory_scan();
         self.poll_rom_download();
+        self.client_update.poll();
+        if self.client_update.busy() {
+            context.request_repaint_after(std::time::Duration::from_millis(100));
+        }
         if let Some(state) = self.retroarch_installer.poll() {
             self.notice = Some(match state {
                 RetroArchInstallState::InstallerStarted(directory) => {
@@ -712,6 +769,12 @@ impl eframe::App for MonolithApp {
         }
 
         if self.active_user_id().is_none() {
+            egui::TopBottomPanel::top("update-header").show(context, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("MONOLITH");
+                    self.render_update_control(ui);
+                });
+            });
             egui::CentralPanel::default().show(context, |ui| self.render_login(ui));
             return;
         }
@@ -726,6 +789,7 @@ impl eframe::App for MonolithApp {
                     self.nav.back();
                 }
                 ui.separator();
+                self.render_update_control(ui);
                 if ui.button("Paramètres serveur").clicked() {
                     self.backend_url_draft = self.auth.backend_url().into();
                     self.show_connection_settings = true;
@@ -835,6 +899,9 @@ impl MonolithApp {
             ui.add_space(55.0);
             ui.heading(egui::RichText::new("MONOLITH").size(40.0).strong());
             ui.label("Connexion au catalogue · accès hors ligne toujours disponible");
+            if let Some(notice) = &self.notice {
+                ui.colored_label(egui::Color32::YELLOW, notice);
+            }
             if ui.button("Paramètres serveur").clicked() {
                 self.backend_url_draft = self.auth.backend_url().into();
                 self.show_connection_settings = true;

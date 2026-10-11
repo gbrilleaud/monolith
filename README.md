@@ -65,6 +65,8 @@ Une version distribuable est publiée par un tag Git `vX.Y.Z`. La chaîne vérif
 
 Le paramètre Windows `MONOLITH_DATA_DIR=C:\\MONOLITH\\client-data` peut être défini dans le raccourci ou le script de lancement. `MONOLITH_BACKEND_URL` reste accepté en priorité pour un déploiement administré, mais l’écran **Paramètres serveur** évite d’avoir à modifier des variables d’environnement pour l’usage courant.
 
+Le client Windows vérifie au démarrage la dernière Release stable GitHub (sans téléchargement automatique). Si son tag `vX.Y.Z` est plus récent que la version intégrée au client et contient l’archive Windows et son `.sha256`, le bouton **Nouvelle version disponible** apparaît même hors connexion au backend Monolith. Un clic télécharge l’archive dans le dossier de données, vérifie le SHA-256 et prépare uniquement `monolith.exe` ; un second clic **Installer et redémarrer Monolith** ferme l’application, remplace ce client dans son dossier actuel et le relance. Le dossier du programme doit être accessible en écriture par l’utilisateur ; la base, la configuration, les ROMs et les outils restent inchangés. Cette fonction ne met pas à jour `monolith-backend.exe` ni `monolith-admin.exe`. En cas d’échec du relais, l’erreur est conservée dans `client-data/updates/installation-error.txt` et affichée au prochain lancement manuel. Linux nécessite pour l’instant une mise à jour manuelle. Il n’existe pas de Release à détecter avant la publication du premier tag ; le tag doit correspondre exactement à la version de `Cargo.toml`.
+
 Pour créer une Release :
 
 ```bash

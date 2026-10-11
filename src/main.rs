@@ -11,6 +11,31 @@ use monolith::{
 use std::path::PathBuf;
 
 fn main() -> eframe::Result<()> {
+    #[cfg(target_os = "windows")]
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--apply-update")) {
+        let arguments: Vec<_> = std::env::args_os().skip(2).collect();
+        let result = if arguments.len() == 4 {
+            monolith::client_update::apply_update(
+                std::path::Path::new(&arguments[0]),
+                std::path::Path::new(&arguments[1]),
+                &arguments[2].to_string_lossy(),
+                std::path::Path::new(&arguments[3]),
+            )
+        } else {
+            Err(anyhow::anyhow!("arguments d’installation invalides"))
+        };
+        if let Err(error) = result {
+            let report = format!("Installation Monolith échouée : {error:#}");
+            if let Some(staged) = arguments.first() {
+                if let Some(folder) = std::path::Path::new(staged).parent() {
+                    let _ = std::fs::write(folder.join("installation-error.txt"), &report);
+                }
+            }
+            eprintln!("{report}");
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
     let data_dir = std::env::var_os("MONOLITH_DATA_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("data"));
