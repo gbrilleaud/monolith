@@ -25,12 +25,12 @@ jobs:
             platform: linux
             artifact: monolith-flutter-linux
             output: flutter_app/build/linux/x64/release/bundle
-            native_library: target/release/libmonolith.so
+            native_library: flutter_app/build/linux/x64/release/bundle/lib/libmonolith.so
           - os: windows-latest
             platform: windows
             artifact: monolith-flutter-windows
             output: flutter_app/build/windows/x64/runner/Release
-            native_library: target/release/monolith.dll
+            native_library: flutter_app/build/windows/x64/runner/Release/monolith.dll
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
