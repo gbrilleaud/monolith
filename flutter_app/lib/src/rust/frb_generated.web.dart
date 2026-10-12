@@ -33,7 +33,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  FlutterIdentity dco_decode_box_autoadd_flutter_identity(dynamic raw);
+
+  @protected
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
+
+  @protected
+  FlutterIdentity dco_decode_flutter_identity(dynamic raw);
+
+  @protected
+  FlutterUpdateStatus dco_decode_flutter_update_status(dynamic raw);
 
   @protected
   PlatformInt64 dco_decode_i_64(dynamic raw);
@@ -57,6 +66,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
+  FlutterIdentity? dco_decode_opt_box_autoadd_flutter_identity(dynamic raw);
+
+  @protected
   PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
 
   @protected
@@ -75,7 +87,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  FlutterIdentity sse_decode_box_autoadd_flutter_identity(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
+  FlutterIdentity sse_decode_flutter_identity(SseDeserializer deserializer);
+
+  @protected
+  FlutterUpdateStatus sse_decode_flutter_update_status(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
@@ -99,6 +124,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
+  FlutterIdentity? sse_decode_opt_box_autoadd_flutter_identity(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
@@ -125,8 +155,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_flutter_identity(
+    FlutterIdentity self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_i_64(
     PlatformInt64 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_flutter_identity(
+    FlutterIdentity self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_flutter_update_status(
+    FlutterUpdateStatus self,
     SseSerializer serializer,
   );
 
@@ -162,6 +210,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_flutter_identity(
+    FlutterIdentity? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_i_64(

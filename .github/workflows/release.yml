@@ -25,6 +25,8 @@ jobs:
         run: |
           version=$(cargo metadata --no-deps --format-version 1 | python3 -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "monolith"))')
           test "${{ github.ref_name }}" = "v${version}"
+          flutter_version=$(python3 -c 'import re; print(re.search(r"^version:\s*([^+\s]+)", open("flutter_app/pubspec.yaml").read(), re.M).group(1))')
+          test "$flutter_version" = "$version"
       - uses: actions/cache@v4
         with:
           path: |
@@ -107,9 +109,57 @@ jobs:
             dist/${{ matrix.package }}.*
           if-no-files-found: error
 
+  build-flutter-windows:
+    name: Package Flutter Windows x86_64
+    needs: quality
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.7'
+          cache: true
+      - name: Build Flutter desktop with Rust native library
+        working-directory: flutter_app
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+          flutter build windows --release
+      - name: Exercise bundled native library
+        working-directory: flutter_app
+        env:
+          MONOLITH_FRB_LIB: ${{ github.workspace }}/flutter_app/build/windows/x64/runner/Release/monolith.dll
+        run: flutter test test/frb_integration_test.dart
+      - name: Build standalone updater helper
+        run: cargo build --locked --release --bin monolith-flutter-updater
+      - name: Package complete Flutter bundle
+        shell: pwsh
+        run: |
+          $name = 'monolith-flutter-windows-x86_64'
+          $package = "dist/$name"
+          New-Item -ItemType Directory -Force -Path $package | Out-Null
+          Copy-Item flutter_app/build/windows/x64/runner/Release/* $package/ -Recurse
+          Copy-Item target/release/monolith-flutter-updater.exe $package/
+          foreach ($required in @('monolith.exe', 'monolith.dll', 'flutter_windows.dll', 'monolith-flutter-updater.exe', 'data/app.so', 'data/icudtl.dat', 'data/flutter_assets')) {
+            if (-not (Test-Path "$package/$required")) { throw "Bundle Flutter incomplet : $required" }
+          }
+          Compress-Archive -Path $package -DestinationPath "dist/$name.zip"
+          $hash = (Get-FileHash "dist/$name.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  $name.zip" | Set-Content "dist/$name.zip.sha256" -NoNewline
+      - uses: actions/upload-artifact@v4
+        with:
+          name: monolith-flutter-windows-x86_64
+          path: |
+            dist/monolith-flutter-windows-x86_64.zip
+            dist/monolith-flutter-windows-x86_64.zip.sha256
+          if-no-files-found: error
+
   publish:
     name: Publish GitHub Release
-    needs: build-release
+    needs: [build-release, build-flutter-windows]
     runs-on: ubuntu-latest
     steps:
       - name: Download packaged files

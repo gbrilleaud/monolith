@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'src/rust/flutter_api.dart';
 import 'src/rust/library_service.dart';
 
 const _background = Color(0xFF080C15);
@@ -9,23 +10,44 @@ const _surface = Color(0xFF141B29);
 const _accent = Color(0xFF67D6DA);
 
 /// Présentation pure : les jeux, filtres et autorisations viennent de Rust.
-class MonolithLibraryView extends StatelessWidget {
+class MonolithLibraryView extends StatefulWidget {
   const MonolithLibraryView({
     super.key,
     required this.sections,
     required this.onLaunch,
+    this.onDownload,
+    this.onEmulators,
+    this.update,
+    this.onUpdate,
     this.onSearchChanged,
     this.onRefresh,
+    this.identity,
+    this.onLogout,
+    this.onLogin,
     this.busy = false,
     this.notice,
   });
 
   final List<LibrarySection> sections;
   final ValueChanged<String> onLaunch;
+  final ValueChanged<int>? onDownload;
+  final VoidCallback? onEmulators;
+  final FlutterUpdateStatus? update;
+  final VoidCallback? onUpdate;
   final ValueChanged<String>? onSearchChanged;
   final VoidCallback? onRefresh;
+  final FlutterIdentity? identity;
+  final VoidCallback? onLogout;
+  final VoidCallback? onLogin;
   final bool busy;
   final String? notice;
+
+  @override
+  State<MonolithLibraryView> createState() => _MonolithLibraryViewState();
+}
+
+class _MonolithLibraryViewState extends State<MonolithLibraryView> {
+  bool _list = false;
 
   @override
   Widget build(BuildContext context) {
@@ -38,11 +60,11 @@ class MonolithLibraryView extends StatelessWidget {
             final content = CustomScrollView(
               slivers: [
                 SliverToBoxAdapter(child: _header(context, wide)),
-                if (busy)
+                if (widget.busy)
                   const SliverToBoxAdapter(
                     child: LinearProgressIndicator(color: _accent),
                   ),
-                if (notice != null)
+                if (widget.notice != null)
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
@@ -50,12 +72,12 @@ class MonolithLibraryView extends StatelessWidget {
                         vertical: 8,
                       ),
                       child: Text(
-                        notice!,
+                        widget.notice!,
                         style: const TextStyle(color: Color(0xFFFFC578)),
                       ),
                     ),
                   ),
-                if (sections.isEmpty)
+                if (widget.sections.isEmpty)
                   SliverFillRemaining(
                     hasScrollBody: false,
                     child: Center(
@@ -73,14 +95,14 @@ class MonolithLibraryView extends StatelessWidget {
                           ),
                           const SizedBox(height: 16),
                           OutlinedButton(
-                            onPressed: onRefresh,
+                            onPressed: widget.onRefresh,
                             child: const Text('Actualiser'),
                           ),
                         ],
                       ),
                     ),
                   ),
-                for (final section in sections)
+                for (final section in widget.sections)
                   SliverToBoxAdapter(
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 280),
@@ -131,7 +153,7 @@ class MonolithLibraryView extends StatelessWidget {
                                     ),
                                   ),
                                 ),
-                                for (final section in sections)
+                                for (final section in widget.sections)
                                   ListTile(
                                     leading: const Icon(
                                       Icons.sports_esports_outlined,
@@ -176,6 +198,28 @@ class MonolithLibraryView extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 26),
+        if (widget.identity == null && widget.onLogin != null)
+          Row(
+            children: [
+              const Text('Mode hors ligne'),
+              const Spacer(),
+              TextButton(
+                onPressed: widget.onLogin,
+                child: const Text('Connexion'),
+              ),
+            ],
+          ),
+        if (widget.identity != null)
+          Row(
+            children: [
+              Text(widget.identity!.username),
+              const Spacer(),
+              TextButton(
+                onPressed: widget.onLogout,
+                child: const Text('Déconnexion'),
+              ),
+            ],
+          ),
         Text(
           'Votre bibliothèque',
           style: Theme.of(context).textTheme.headlineMedium
@@ -188,13 +232,13 @@ class MonolithLibraryView extends StatelessWidget {
         ),
         const SizedBox(height: 22),
         TextField(
-          onChanged: onSearchChanged,
+          onChanged: widget.onSearchChanged,
           decoration: InputDecoration(
             hintText: 'Rechercher un jeu (* et ? acceptés)',
             prefixIcon: const Icon(Icons.search, color: _accent),
             suffixIcon: IconButton(
               tooltip: 'Actualiser',
-              onPressed: onRefresh,
+              onPressed: widget.onRefresh,
               icon: const Icon(Icons.refresh),
             ),
             filled: true,
@@ -204,6 +248,66 @@ class MonolithLibraryView extends StatelessWidget {
               borderSide: BorderSide.none,
             ),
           ),
+        ),
+        const SizedBox(height: 12),
+        if (widget.update != null && widget.update!.phase != 'unsupported') ...[
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed:
+                  widget.update!.phase == 'checking' ||
+                      widget.update!.phase == 'downloading'
+                  ? null
+                  : widget.onUpdate,
+              icon: Icon(
+                widget.update!.phase == 'ready'
+                    ? Icons.system_update_alt
+                    : Icons.update,
+              ),
+              label: Text(switch (widget.update!.phase) {
+                'available' =>
+                  'Télécharger Monolith ${widget.update!.version ?? ''}',
+                'ready' => 'Installer la dernière version de Monolith',
+                'checking' => 'Recherche de mise à jour…',
+                'downloading' => 'Téléchargement de Monolith…',
+                'error' => 'Réessayer la mise à jour de Monolith',
+                _ => 'Vérifier les mises à jour de Monolith',
+              }),
+            ),
+          ),
+          if (widget.update!.message != null)
+            Text(
+              widget.update!.message!,
+              style: const TextStyle(color: Color(0xFFFFC578)),
+            ),
+          const SizedBox(height: 12),
+        ],
+        Row(
+          children: [
+            if (widget.onEmulators != null)
+              OutlinedButton.icon(
+                onPressed: widget.onEmulators,
+                icon: const Icon(Icons.settings_input_component),
+                label: const Text('Émulateurs'),
+              ),
+            const Spacer(),
+            IconButton(
+              tooltip: 'Vue grille',
+              onPressed: () => setState(() => _list = false),
+              icon: Icon(
+                Icons.grid_view,
+                color: _list ? Colors.white54 : _accent,
+              ),
+            ),
+            IconButton(
+              tooltip: 'Vue liste',
+              onPressed: () => setState(() => _list = true),
+              icon: Icon(
+                Icons.view_list,
+                color: _list ? _accent : Colors.white54,
+              ),
+            ),
+          ],
         ),
       ],
     ),
@@ -218,7 +322,11 @@ class MonolithLibraryView extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
           child: Row(
             children: [
-              const Icon(Icons.grid_view_rounded, color: _accent, size: 22),
+              Icon(
+                _list ? Icons.view_list : Icons.grid_view_rounded,
+                color: _accent,
+                size: 22,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -238,28 +346,93 @@ class MonolithLibraryView extends StatelessWidget {
             ],
           ),
         ),
-        SizedBox(
-          height: 310,
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            scrollDirection: Axis.horizontal,
-            itemCount: section.games.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 14),
-            itemBuilder: (context, index) => SizedBox(
-              width: 196,
-              child: _GameCard(game: section.games[index], onLaunch: onLaunch),
-            ),
-          ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: _list
+              ? Column(
+                  children: [
+                    for (final game in section.games)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          tileColor: _surface,
+                          title: Text(game.title),
+                          subtitle: Text(
+                            game.description,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: _gameAction(
+                            game,
+                            widget.onLaunch,
+                            widget.onDownload,
+                            widget.busy,
+                          ),
+                        ),
+                      ),
+                  ],
+                )
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final columns = ((constraints.maxWidth + 14) / 210)
+                        .floor()
+                        .clamp(1, 12);
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columns,
+                        mainAxisSpacing: 14,
+                        crossAxisSpacing: 14,
+                        mainAxisExtent: 410,
+                      ),
+                      itemCount: section.games.length,
+                      itemBuilder: (context, index) => _GameCard(
+                        game: section.games[index],
+                        onLaunch: widget.onLaunch,
+                        onDownload: widget.onDownload,
+                        busy: widget.busy,
+                      ),
+                    );
+                  },
+                ),
         ),
       ],
     ),
   );
 }
 
+Widget _gameAction(
+  LibraryGame game,
+  ValueChanged<String> onLaunch,
+  ValueChanged<int>? onDownload,
+  bool busy,
+) => FilledButton.icon(
+  onPressed: busy
+      ? null
+      : game.available
+      ? () => onLaunch(game.path)
+      : game.gameId != null && onDownload != null
+      ? () => onDownload(game.gameId!)
+      : null,
+  icon: Icon(
+    game.available ? Icons.play_arrow_rounded : Icons.download_rounded,
+    size: 18,
+  ),
+  label: Text(game.available ? 'Lancer' : 'Télécharger'),
+);
+
 class _GameCard extends StatelessWidget {
-  const _GameCard({required this.game, required this.onLaunch});
+  const _GameCard({
+    required this.game,
+    required this.onLaunch,
+    this.onDownload,
+    required this.busy,
+  });
   final LibraryGame game;
   final ValueChanged<String> onLaunch;
+  final ValueChanged<int>? onDownload;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
@@ -275,7 +448,7 @@ class _GameCard extends StatelessWidget {
       if (cover.startsWith('https://') || cover.startsWith('http://')) {
         image = Image.network(
           cover,
-          fit: BoxFit.cover,
+          fit: BoxFit.contain,
           errorBuilder: (_, _, _) => const Center(
             child: Icon(
               Icons.image_not_supported_outlined,
@@ -286,7 +459,7 @@ class _GameCard extends StatelessWidget {
       } else if (cover.startsWith('file://')) {
         image = Image.file(
           File.fromUri(Uri.parse(cover)),
-          fit: BoxFit.cover,
+          fit: BoxFit.contain,
           errorBuilder: (_, _, _) => const Center(
             child: Icon(
               Icons.image_not_supported_outlined,
@@ -299,15 +472,13 @@ class _GameCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: _surface,
-        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: Colors.white10),
       ),
-      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SizedBox(
-            height: 202,
+            height: 290,
             child: ColoredBox(color: const Color(0xFF202A3C), child: image),
           ),
           Padding(
@@ -330,11 +501,7 @@ class _GameCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             child: SizedBox(
               height: 38,
-              child: FilledButton.icon(
-                onPressed: game.available ? () => onLaunch(game.path) : null,
-                icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                label: Text(game.available ? 'Lancer' : 'Indisponible'),
-              ),
+              child: _gameAction(game, onLaunch, onDownload, busy),
             ),
           ),
         ],

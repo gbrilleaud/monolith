@@ -47,3 +47,7 @@ path = "src/bin/monolith-backend.rs"
 [[bin]]
 name = "monolith-admin"
 path = "src/bin/monolith-admin.rs"
+
+[[bin]]
+name = "monolith-flutter-updater"
+path = "src/bin/monolith-flutter-updater.rs"

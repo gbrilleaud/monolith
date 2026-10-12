@@ -13,13 +13,17 @@ manuellement. Dart ne stocke aucune règle de catalogue, aucun SQL et aucune
 commande d'émulateur.
 
 La première tranche Flutter offre : bibliothèque hors ligne, recherche wildcard
-déléguée à Rust, sections horizontales animées, jaquettes HTTP(S) ou `file://`,
-tuiles homogènes adaptatives, lancement depuis une ROM inscrite et disponible
-dans SQLite. Le lancement est exécuté par Rust, sans shell. Sans backend ni NAS,
-les données déjà présentes localement restent consultables. La bibliothèque
-utilise le profil d'une session locale non expirée dans `session.json` ; à
-défaut, elle revient au profil hors ligne `user_id=1`, comme egui. Une session
-expirée est effacée. Cela ne remplace pas un écran de connexion Flutter.
+déléguée à Rust, catalogue défilant en grille ou liste, jaquettes HTTP(S) ou
+`file://`, tuiles homogènes adaptatives, lancement depuis une ROM inscrite et
+disponible dans SQLite. Le lancement est exécuté par Rust, sans shell. Sans
+backend ni NAS, les données déjà présentes localement restent consultables.
+La bibliothèque utilise le profil d'une session locale non expirée dans
+`session.json` ; à défaut, elle revient au profil hors ligne `user_id=1`, comme
+egui. Une session expirée est effacée. Flutter permet la connexion locale, le
+choix validé du backend, le rafraîchissement du cache distant et la déconnexion.
+Le catalogue téléchargé est importé dans SQLite par Rust avant l'ouverture
+de la bibliothèque ; le jeton reste dans `session.json`, jamais dans Dart.
+L'écran conserve un accès hors ligne volontaire.
 Le client egui et la chaîne officielle de release restent en place jusqu'à
 parité fonctionnelle et validation native ; **ne pas remplacer la release egui
 par l'artefact Flutter pour l'instant**.
@@ -64,12 +68,15 @@ dépôt. Les profils d'émulateurs sont résolus par Rust sous ce même dossier.
 
 ## Limites avant remplacement d'egui
 
-- Flutter n'expose pour l'instant que la bibliothèque locale du profil de
-  session valide (ou `user_id=1` hors ligne) et le lancement ; connexion/SSO,
-  gestion des comptes, uploads, associations, édition, synchronisation et mises
-  à jour restent dans egui. Il n'y a pas encore de parité fonctionnelle. Les
-  téléchargements de jaquettes privés requièrent des fichiers déjà synchronisés
-  localement ou des URL accessibles.
+- Flutter expose la bibliothèque locale du profil de session valide (ou
+  `user_id=1` hors ligne), le lancement, le paramétrage serveur, la connexion
+  locale, les téléchargements de ROM et la configuration des émulateurs. Une
+  mise à jour distincte du bundle Flutter est proposée sous Windows à partir
+  d'une Release GitHub compatible, sur confirmation explicite. Le SSO, la gestion
+  des comptes, les uploads, les associations, l'édition et la synchronisation
+  continue restent à porter ; il n'y a pas encore de parité fonctionnelle. Les
+  jaquettes privées requièrent des fichiers déjà synchronisés localement ou des
+  URL accessibles.
 - Les adaptateurs d'émulateur existants servent Windows et Linux. La présence
   d'un profil et d'une ROM locale est requise. Le lancement n'a été testé ici
   que par résolution de commande, pas avec un émulateur réellement installé.

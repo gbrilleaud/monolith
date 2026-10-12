@@ -20,6 +20,32 @@ void main() {
         );
         expect(sections, isEmpty);
         expect(await File('${directory.path}/monolith.db').exists(), isTrue);
+        expect(
+          await api.sessionIdentity(dataDirectory: directory.path),
+          isNull,
+        );
+        final originalUrl = await api.backendUrl(dataDirectory: directory.path);
+        expect(originalUrl, isNotEmpty);
+        await api.saveBackendUrl(
+          dataDirectory: directory.path,
+          value: 'http://127.0.0.1:8787/',
+        );
+        expect(
+          await api.backendUrl(dataDirectory: directory.path),
+          'http://127.0.0.1:8787',
+        );
+        await api.logout(dataDirectory: directory.path);
+        expect(await File('${directory.path}/session.json').exists(), isFalse);
+        if (!Platform.isWindows) {
+          final update = await api.flutterUpdateStatus(
+            dataDirectory: directory.path,
+          );
+          expect(update.phase, 'unsupported');
+          await expectLater(
+            api.installFlutterUpdate(dataDirectory: directory.path),
+            throwsA(isA<Exception>()),
+          );
+        }
       } finally {
         RustLib.dispose();
         await directory.delete(recursive: true);

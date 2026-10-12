@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 150511955;
+  int get rustContentHash => -1768544915;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -79,7 +79,39 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
+  Future<String> crateFlutterApiBackendUrl({required String dataDirectory});
+
+  Future<void> crateFlutterApiCheckFlutterUpdate({
+    required String dataDirectory,
+  });
+
   Future<String> crateFlutterApiDefaultDataDirectory();
+
+  Future<void> crateFlutterApiDownloadFlutterUpdate({
+    required String dataDirectory,
+  });
+
+  Future<String> crateFlutterApiDownloadLibraryRom({
+    required String dataDirectory,
+    required PlatformInt64 gameId,
+  });
+
+  Future<String> crateFlutterApiEmulatorConfigText({
+    required String dataDirectory,
+  });
+
+  Future<FlutterUpdateStatus> crateFlutterApiFlutterUpdateStatus({
+    required String dataDirectory,
+  });
+
+  Future<String> crateFlutterApiInstallEmulator({
+    required String dataDirectory,
+    required String name,
+  });
+
+  Future<void> crateFlutterApiInstallFlutterUpdate({
+    required String dataDirectory,
+  });
 
   Future<void> crateFlutterApiLaunchLibraryRom({
     required String dataDirectory,
@@ -89,6 +121,28 @@ abstract class RustLibApi extends BaseApi {
   Future<List<LibrarySection>> crateFlutterApiLoadLibrary({
     required String dataDirectory,
     required String query,
+  });
+
+  Future<FlutterIdentity> crateFlutterApiLoginLocal({
+    required String dataDirectory,
+    required String username,
+    required String password,
+  });
+
+  Future<void> crateFlutterApiLogout({required String dataDirectory});
+
+  Future<void> crateFlutterApiSaveBackendUrl({
+    required String dataDirectory,
+    required String value,
+  });
+
+  Future<void> crateFlutterApiSaveEmulatorConfig({
+    required String dataDirectory,
+    required String value,
+  });
+
+  Future<FlutterIdentity?> crateFlutterApiSessionIdentity({
+    required String dataDirectory,
   });
 }
 
@@ -101,6 +155,69 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
+  Future<String> crateFlutterApiBackendUrl({required String dataDirectory}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dataDirectory, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 1,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateFlutterApiBackendUrlConstMeta,
+        argValues: [dataDirectory],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateFlutterApiBackendUrlConstMeta => const TaskConstMeta(
+    debugName: "backend_url",
+    argNames: ["dataDirectory"],
+  );
+
+  @override
+  Future<void> crateFlutterApiCheckFlutterUpdate({
+    required String dataDirectory,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dataDirectory, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 2,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateFlutterApiCheckFlutterUpdateConstMeta,
+        argValues: [dataDirectory],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateFlutterApiCheckFlutterUpdateConstMeta =>
+      const TaskConstMeta(
+        debugName: "check_flutter_update",
+        argNames: ["dataDirectory"],
+      );
+
+  @override
   Future<String> crateFlutterApiDefaultDataDirectory() {
     return handler.executeNormal(
       NormalTask(
@@ -109,7 +226,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 1,
+            funcId: 3,
             port: port_,
           );
         },
@@ -128,6 +245,208 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "default_data_directory", argNames: []);
 
   @override
+  Future<void> crateFlutterApiDownloadFlutterUpdate({
+    required String dataDirectory,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dataDirectory, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 4,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateFlutterApiDownloadFlutterUpdateConstMeta,
+        argValues: [dataDirectory],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateFlutterApiDownloadFlutterUpdateConstMeta =>
+      const TaskConstMeta(
+        debugName: "download_flutter_update",
+        argNames: ["dataDirectory"],
+      );
+
+  @override
+  Future<String> crateFlutterApiDownloadLibraryRom({
+    required String dataDirectory,
+    required PlatformInt64 gameId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dataDirectory, serializer);
+          sse_encode_i_64(gameId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 5,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateFlutterApiDownloadLibraryRomConstMeta,
+        argValues: [dataDirectory, gameId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateFlutterApiDownloadLibraryRomConstMeta =>
+      const TaskConstMeta(
+        debugName: "download_library_rom",
+        argNames: ["dataDirectory", "gameId"],
+      );
+
+  @override
+  Future<String> crateFlutterApiEmulatorConfigText({
+    required String dataDirectory,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dataDirectory, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateFlutterApiEmulatorConfigTextConstMeta,
+        argValues: [dataDirectory],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateFlutterApiEmulatorConfigTextConstMeta =>
+      const TaskConstMeta(
+        debugName: "emulator_config_text",
+        argNames: ["dataDirectory"],
+      );
+
+  @override
+  Future<FlutterUpdateStatus> crateFlutterApiFlutterUpdateStatus({
+    required String dataDirectory,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dataDirectory, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 7,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_flutter_update_status,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateFlutterApiFlutterUpdateStatusConstMeta,
+        argValues: [dataDirectory],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateFlutterApiFlutterUpdateStatusConstMeta =>
+      const TaskConstMeta(
+        debugName: "flutter_update_status",
+        argNames: ["dataDirectory"],
+      );
+
+  @override
+  Future<String> crateFlutterApiInstallEmulator({
+    required String dataDirectory,
+    required String name,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dataDirectory, serializer);
+          sse_encode_String(name, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 8,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateFlutterApiInstallEmulatorConstMeta,
+        argValues: [dataDirectory, name],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateFlutterApiInstallEmulatorConstMeta =>
+      const TaskConstMeta(
+        debugName: "install_emulator",
+        argNames: ["dataDirectory", "name"],
+      );
+
+  @override
+  Future<void> crateFlutterApiInstallFlutterUpdate({
+    required String dataDirectory,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dataDirectory, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 9,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateFlutterApiInstallFlutterUpdateConstMeta,
+        argValues: [dataDirectory],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateFlutterApiInstallFlutterUpdateConstMeta =>
+      const TaskConstMeta(
+        debugName: "install_flutter_update",
+        argNames: ["dataDirectory"],
+      );
+
+  @override
   Future<void> crateFlutterApiLaunchLibraryRom({
     required String dataDirectory,
     required String path,
@@ -141,7 +460,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 2,
+            funcId: 10,
             port: port_,
           );
         },
@@ -176,7 +495,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 11,
             port: port_,
           );
         },
@@ -195,6 +514,173 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     debugName: "load_library",
     argNames: ["dataDirectory", "query"],
   );
+
+  @override
+  Future<FlutterIdentity> crateFlutterApiLoginLocal({
+    required String dataDirectory,
+    required String username,
+    required String password,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dataDirectory, serializer);
+          sse_encode_String(username, serializer);
+          sse_encode_String(password, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 12,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_flutter_identity,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateFlutterApiLoginLocalConstMeta,
+        argValues: [dataDirectory, username, password],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateFlutterApiLoginLocalConstMeta => const TaskConstMeta(
+    debugName: "login_local",
+    argNames: ["dataDirectory", "username", "password"],
+  );
+
+  @override
+  Future<void> crateFlutterApiLogout({required String dataDirectory}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dataDirectory, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 13,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateFlutterApiLogoutConstMeta,
+        argValues: [dataDirectory],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateFlutterApiLogoutConstMeta =>
+      const TaskConstMeta(debugName: "logout", argNames: ["dataDirectory"]);
+
+  @override
+  Future<void> crateFlutterApiSaveBackendUrl({
+    required String dataDirectory,
+    required String value,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dataDirectory, serializer);
+          sse_encode_String(value, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 14,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateFlutterApiSaveBackendUrlConstMeta,
+        argValues: [dataDirectory, value],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateFlutterApiSaveBackendUrlConstMeta =>
+      const TaskConstMeta(
+        debugName: "save_backend_url",
+        argNames: ["dataDirectory", "value"],
+      );
+
+  @override
+  Future<void> crateFlutterApiSaveEmulatorConfig({
+    required String dataDirectory,
+    required String value,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dataDirectory, serializer);
+          sse_encode_String(value, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 15,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateFlutterApiSaveEmulatorConfigConstMeta,
+        argValues: [dataDirectory, value],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateFlutterApiSaveEmulatorConfigConstMeta =>
+      const TaskConstMeta(
+        debugName: "save_emulator_config",
+        argNames: ["dataDirectory", "value"],
+      );
+
+  @override
+  Future<FlutterIdentity?> crateFlutterApiSessionIdentity({
+    required String dataDirectory,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dataDirectory, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 16,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_box_autoadd_flutter_identity,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateFlutterApiSessionIdentityConstMeta,
+        argValues: [dataDirectory],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateFlutterApiSessionIdentityConstMeta =>
+      const TaskConstMeta(
+        debugName: "session_identity",
+        argNames: ["dataDirectory"],
+      );
 
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw) {
@@ -215,9 +701,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  FlutterIdentity dco_decode_box_autoadd_flutter_identity(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_flutter_identity(raw);
+  }
+
+  @protected
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_i_64(raw);
+  }
+
+  @protected
+  FlutterIdentity dco_decode_flutter_identity(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return FlutterIdentity(
+      userId: dco_decode_i_64(arr[0]),
+      username: dco_decode_String(arr[1]),
+      role: dco_decode_String(arr[2]),
+    );
+  }
+
+  @protected
+  FlutterUpdateStatus dco_decode_flutter_update_status(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return FlutterUpdateStatus(
+      phase: dco_decode_String(arr[0]),
+      version: dco_decode_opt_String(arr[1]),
+      message: dco_decode_opt_String(arr[2]),
+    );
   }
 
   @protected
@@ -281,6 +799,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  FlutterIdentity? dco_decode_opt_box_autoadd_flutter_identity(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_flutter_identity(raw);
+  }
+
+  @protected
   PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_i_64(raw);
@@ -319,9 +843,45 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  FlutterIdentity sse_decode_box_autoadd_flutter_identity(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_flutter_identity(deserializer));
+  }
+
+  @protected
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_i_64(deserializer));
+  }
+
+  @protected
+  FlutterIdentity sse_decode_flutter_identity(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_userId = sse_decode_i_64(deserializer);
+    var var_username = sse_decode_String(deserializer);
+    var var_role = sse_decode_String(deserializer);
+    return FlutterIdentity(
+      userId: var_userId,
+      username: var_username,
+      role: var_role,
+    );
+  }
+
+  @protected
+  FlutterUpdateStatus sse_decode_flutter_update_status(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_phase = sse_decode_String(deserializer);
+    var var_version = sse_decode_opt_String(deserializer);
+    var var_message = sse_decode_opt_String(deserializer);
+    return FlutterUpdateStatus(
+      phase: var_phase,
+      version: var_version,
+      message: var_message,
+    );
   }
 
   @protected
@@ -409,6 +969,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  FlutterIdentity? sse_decode_opt_box_autoadd_flutter_identity(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_flutter_identity(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -458,12 +1031,43 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_flutter_identity(
+    FlutterIdentity self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_flutter_identity(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_i_64(
     PlatformInt64 self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_64(self, serializer);
+  }
+
+  @protected
+  void sse_encode_flutter_identity(
+    FlutterIdentity self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.userId, serializer);
+    sse_encode_String(self.username, serializer);
+    sse_encode_String(self.role, serializer);
+  }
+
+  @protected
+  void sse_encode_flutter_update_status(
+    FlutterUpdateStatus self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.phase, serializer);
+    sse_encode_opt_String(self.version, serializer);
+    sse_encode_opt_String(self.message, serializer);
   }
 
   @protected
@@ -536,6 +1140,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_String(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_flutter_identity(
+    FlutterIdentity? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_flutter_identity(self, serializer);
     }
   }
 

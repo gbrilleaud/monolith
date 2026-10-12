@@ -8,6 +8,30 @@ import 'library_service.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+// These functions are ignored because they are not marked as `pub`: `active_session`, `flutter_updater`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
+
+Future<FlutterUpdateStatus> flutterUpdateStatus({
+  required String dataDirectory,
+}) => RustLib.instance.api.crateFlutterApiFlutterUpdateStatus(
+  dataDirectory: dataDirectory,
+);
+
+Future<void> checkFlutterUpdate({required String dataDirectory}) => RustLib
+    .instance
+    .api
+    .crateFlutterApiCheckFlutterUpdate(dataDirectory: dataDirectory);
+
+Future<void> downloadFlutterUpdate({required String dataDirectory}) => RustLib
+    .instance
+    .api
+    .crateFlutterApiDownloadFlutterUpdate(dataDirectory: dataDirectory);
+
+Future<void> installFlutterUpdate({required String dataDirectory}) => RustLib
+    .instance
+    .api
+    .crateFlutterApiInstallFlutterUpdate(dataDirectory: dataDirectory);
+
 Future<String> defaultDataDirectory() =>
     RustLib.instance.api.crateFlutterApiDefaultDataDirectory();
 
@@ -19,6 +43,66 @@ Future<List<LibrarySection>> loadLibrary({
   query: query,
 );
 
+Future<FlutterIdentity?> sessionIdentity({required String dataDirectory}) =>
+    RustLib.instance.api.crateFlutterApiSessionIdentity(
+      dataDirectory: dataDirectory,
+    );
+
+Future<String> backendUrl({required String dataDirectory}) => RustLib
+    .instance
+    .api
+    .crateFlutterApiBackendUrl(dataDirectory: dataDirectory);
+
+Future<void> saveBackendUrl({
+  required String dataDirectory,
+  required String value,
+}) => RustLib.instance.api.crateFlutterApiSaveBackendUrl(
+  dataDirectory: dataDirectory,
+  value: value,
+);
+
+Future<FlutterIdentity> loginLocal({
+  required String dataDirectory,
+  required String username,
+  required String password,
+}) => RustLib.instance.api.crateFlutterApiLoginLocal(
+  dataDirectory: dataDirectory,
+  username: username,
+  password: password,
+);
+
+Future<void> logout({required String dataDirectory}) =>
+    RustLib.instance.api.crateFlutterApiLogout(dataDirectory: dataDirectory);
+
+Future<String> downloadLibraryRom({
+  required String dataDirectory,
+  required PlatformInt64 gameId,
+}) => RustLib.instance.api.crateFlutterApiDownloadLibraryRom(
+  dataDirectory: dataDirectory,
+  gameId: gameId,
+);
+
+Future<String> emulatorConfigText({required String dataDirectory}) => RustLib
+    .instance
+    .api
+    .crateFlutterApiEmulatorConfigText(dataDirectory: dataDirectory);
+
+Future<void> saveEmulatorConfig({
+  required String dataDirectory,
+  required String value,
+}) => RustLib.instance.api.crateFlutterApiSaveEmulatorConfig(
+  dataDirectory: dataDirectory,
+  value: value,
+);
+
+Future<String> installEmulator({
+  required String dataDirectory,
+  required String name,
+}) => RustLib.instance.api.crateFlutterApiInstallEmulator(
+  dataDirectory: dataDirectory,
+  name: name,
+);
+
 Future<void> launchLibraryRom({
   required String dataDirectory,
   required String path,
@@ -26,3 +110,47 @@ Future<void> launchLibraryRom({
   dataDirectory: dataDirectory,
   path: path,
 );
+
+class FlutterIdentity {
+  final PlatformInt64 userId;
+  final String username;
+  final String role;
+
+  const FlutterIdentity({
+    required this.userId,
+    required this.username,
+    required this.role,
+  });
+
+  @override
+  int get hashCode => userId.hashCode ^ username.hashCode ^ role.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FlutterIdentity &&
+          runtimeType == other.runtimeType &&
+          userId == other.userId &&
+          username == other.username &&
+          role == other.role;
+}
+
+class FlutterUpdateStatus {
+  final String phase;
+  final String? version;
+  final String? message;
+
+  const FlutterUpdateStatus({required this.phase, this.version, this.message});
+
+  @override
+  int get hashCode => phase.hashCode ^ version.hashCode ^ message.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FlutterUpdateStatus &&
+          runtimeType == other.runtimeType &&
+          phase == other.phase &&
+          version == other.version &&
+          message == other.message;
+}
