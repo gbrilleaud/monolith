@@ -284,7 +284,10 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
             ),
           const SizedBox(height: 12),
         ],
-        Row(
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             if (widget.onEmulators != null)
               OutlinedButton.icon(
@@ -298,22 +301,26 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
                 icon: const Icon(Icons.sports_esports),
                 label: const Text('Manettes'),
               ),
-            const Spacer(),
-            IconButton(
-              tooltip: 'Vue grille',
-              onPressed: () => setState(() => _list = false),
-              icon: Icon(
-                Icons.grid_view,
-                color: _list ? Colors.white54 : _accent,
-              ),
-            ),
-            IconButton(
-              tooltip: 'Vue liste',
-              onPressed: () => setState(() => _list = true),
-              icon: Icon(
-                Icons.view_list,
-                color: _list ? _accent : Colors.white54,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Vue grille',
+                  onPressed: () => setState(() => _list = false),
+                  icon: Icon(
+                    Icons.grid_view,
+                    color: _list ? Colors.white54 : _accent,
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Vue liste',
+                  onPressed: () => setState(() => _list = true),
+                  icon: Icon(
+                    Icons.view_list,
+                    color: _list ? _accent : Colors.white54,
+                  ),
+                ),
+              ],
             ),
           ],
         ),

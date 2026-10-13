@@ -6,6 +6,32 @@ import 'package:monolith/src/rust/library_service.dart';
 
 void main() {
   testWidgets(
+    'boutons émulateurs et manettes restent accessibles sur écran étroit',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      var emulatorClicks = 0;
+      var controllerClicks = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MonolithLibraryView(
+            sections: const [],
+            onLaunch: (_) {},
+            onEmulators: () => emulatorClicks++,
+            onControllers: () => controllerClicks++,
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('Émulateurs'));
+      await tester.tap(find.text('Manettes'));
+      expect(emulatorClicks, 1);
+      expect(controllerClicks, 1);
+    },
+  );
+  testWidgets(
     'mise à jour Flutter séparée, explicite et accessible sur mobile',
     (tester) async {
       tester.view.physicalSize = const Size(390, 844);
