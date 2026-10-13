@@ -39,3 +39,15 @@ re-read whole files.
 After big code changes, refresh the graph with `graft build` (deterministic,
 no API key, $0).
 <!-- graft:end -->
+
+## Parité des clients
+
+Une fonctionnalité utilisateur commune aux clients doit être implémentée dans
+le service Rust partagé, puis exposée par deux présentations : egui et Flutter
+(via FRB). Avant de déclarer la fonctionnalité terminée, ajouter une entrée
+dans `feature-parity.json` avec ses cinq points de contrôle (`core`, `egui`,
+`flutter`, `rust_test`, `flutter_test`) et exécuter
+`python3 scripts/check_feature_parity.py`. La CI applique ce contrat en plus
+des vrais tests. Ce contrôle statique ne prouve pas la qualité visuelle ou la
+parité de comportement : vérifier les deux interfaces sur les plateformes
+concernées.

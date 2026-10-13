@@ -19,6 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check egui/Flutter feature parity contract
+        run: |
+          PYTHONPATH=. python3 -m unittest discover -s tests -p test_feature_parity.py
+          python3 scripts/check_feature_parity.py
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy

@@ -1,0 +1,12 @@
+{
+  "features": [
+    {
+      "id": "library_catalog",
+      "core": {"path": "src/library_service.rs", "symbol": "fn sections("},
+      "egui": {"path": "src/ui.rs", "symbol": "fn render_catalog("},
+      "flutter": {"path": "flutter_app/lib/library_view.dart", "symbol": "class MonolithLibraryView"},
+      "rust_test": {"path": "tests/library_service.rs", "symbol": "library_preserves_linked_games_and_unknown_offline_roms"},
+      "flutter_test": {"path": "flutter_app/test/widget_test.dart", "symbol": "bibliothèque mobile affiche les jeux"}
+    }
+  ]
+}
