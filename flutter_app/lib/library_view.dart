@@ -17,6 +17,7 @@ class MonolithLibraryView extends StatefulWidget {
     required this.onLaunch,
     this.onDownload,
     this.onEmulators,
+    this.onControllers,
     this.update,
     this.onUpdate,
     this.onSearchChanged,
@@ -32,6 +33,7 @@ class MonolithLibraryView extends StatefulWidget {
   final ValueChanged<String> onLaunch;
   final ValueChanged<int>? onDownload;
   final VoidCallback? onEmulators;
+  final VoidCallback? onControllers;
   final FlutterUpdateStatus? update;
   final VoidCallback? onUpdate;
   final ValueChanged<String>? onSearchChanged;
@@ -289,6 +291,12 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
                 onPressed: widget.onEmulators,
                 icon: const Icon(Icons.settings_input_component),
                 label: const Text('Émulateurs'),
+              ),
+            if (widget.onControllers != null)
+              OutlinedButton.icon(
+                onPressed: widget.onControllers,
+                icon: const Icon(Icons.sports_esports),
+                label: const Text('Manettes'),
               ),
             const Spacer(),
             IconButton(

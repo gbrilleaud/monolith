@@ -28,6 +28,7 @@ pub struct LaunchCommand {
 #[derive(Debug, Clone)]
 pub struct EmulatorLauncher {
     profiles: HashMap<i64, EmulatorProfile>,
+    controller_root: Option<PathBuf>,
 }
 
 impl EmulatorLauncher {
@@ -39,7 +40,9 @@ impl EmulatorLauncher {
             .with_context(|| format!("lecture de {}", path.display()))?;
         let config: EmulatorConfig = toml::from_str(&text)
             .with_context(|| format!("configuration émulateurs invalide : {}", path.display()))?;
-        Self::from_config(config)
+        let mut launcher = Self::from_config(config)?;
+        launcher.controller_root = path.parent().map(Path::to_path_buf);
+        Ok(launcher)
     }
 
     pub fn from_config(config: EmulatorConfig) -> Result<Self> {
@@ -64,7 +67,10 @@ impl EmulatorLauncher {
                 bail!("profil émulateur dupliqué pour le système");
             }
         }
-        Ok(Self { profiles })
+        Ok(Self {
+            profiles,
+            controller_root: None,
+        })
     }
 
     pub fn command_for(&self, system_id: i64, rom_path: &Path) -> Result<LaunchCommand> {
@@ -76,13 +82,36 @@ impl EmulatorLauncher {
             bail!("ROM locale introuvable : {}", rom_path.display());
         }
         let rom = rom_path.to_string_lossy();
+        let mut arguments: Vec<String> = profile
+            .arguments
+            .iter()
+            .map(|argument| argument.replace("{rom}", &rom))
+            .collect();
+        // RetroArch accepts a per-console overlay without changing the user's
+        // global config. Never pass this option to PCSX2 or Xenia.
+        if Path::new(&profile.executable)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .is_some_and(|name| name.eq_ignore_ascii_case("retroarch"))
+        {
+            if let Some(root) = &self.controller_root {
+                let configured = crate::controller_profiles::ControllerConfig::load(root)?;
+                let overlay = crate::controller_profiles::retroarch_path(root, system_id);
+                if configured.profiles.iter().any(|p| p.system_id == system_id) && overlay.is_file()
+                {
+                    arguments.splice(
+                        0..0,
+                        [
+                            "--appendconfig".into(),
+                            overlay.to_string_lossy().into_owned(),
+                        ],
+                    );
+                }
+            }
+        }
         Ok(LaunchCommand {
             executable: profile.executable.clone(),
-            arguments: profile
-                .arguments
-                .iter()
-                .map(|argument| argument.replace("{rom}", &rom))
-                .collect(),
+            arguments,
         })
     }
 

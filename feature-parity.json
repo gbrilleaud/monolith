@@ -5,8 +5,16 @@
       "core": {"path": "src/library_service.rs", "symbol": "fn sections("},
       "egui": {"path": "src/ui.rs", "symbol": "fn render_catalog("},
       "flutter": {"path": "flutter_app/lib/library_view.dart", "symbol": "class MonolithLibraryView"},
-      "rust_test": {"path": "tests/library_service.rs", "symbol": "library_preserves_linked_games_and_unknown_offline_roms"},
-      "flutter_test": {"path": "flutter_app/test/widget_test.dart", "symbol": "bibliothèque mobile affiche les jeux"}
+      "rust_test": {"path": "tests/library_service.rs", "symbol": "#[test]"},
+      "flutter_test": {"path": "flutter_app/test/widget_test.dart", "symbol": "testWidgets("}
+    },
+    {
+      "id": "controller_settings",
+      "core": {"path": "src/controller_profiles.rs", "symbol": "pub fn reset("},
+      "egui": {"path": "src/ui.rs", "symbol": "fn render_controller_settings("},
+      "flutter": {"path": "flutter_app/lib/controller_settings.dart", "symbol": "class ControllerSettings"},
+      "rust_test": {"path": "tests/controller_profiles.rs", "symbol": "fn reset_restores_autoconfig_without_erasing_emulator_settings("},
+      "flutter_test": {"path": "flutter_app/test/controller_settings_test.dart", "symbol": "testWidgets("}
     }
   ]
 }

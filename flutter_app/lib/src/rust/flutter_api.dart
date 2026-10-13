@@ -11,6 +11,32 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These functions are ignored because they are not marked as `pub`: `active_session`, `flutter_updater`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
 
+Future<String> controllerConfigText({required String dataDirectory}) => RustLib
+    .instance
+    .api
+    .crateFlutterApiControllerConfigText(dataDirectory: dataDirectory);
+
+Future<void> saveControllerConfig({
+  required String dataDirectory,
+  required String value,
+}) => RustLib.instance.api.crateFlutterApiSaveControllerConfig(
+  dataDirectory: dataDirectory,
+  value: value,
+);
+
+Future<void> resetControllerConfig({
+  required String dataDirectory,
+  required PlatformInt64 systemId,
+  required String deviceId,
+}) => RustLib.instance.api.crateFlutterApiResetControllerConfig(
+  dataDirectory: dataDirectory,
+  systemId: systemId,
+  deviceId: deviceId,
+);
+
+Future<List<String>> detectedControllers() =>
+    RustLib.instance.api.crateFlutterApiDetectedControllers();
+
 Future<FlutterUpdateStatus> flutterUpdateStatus({
   required String dataDirectory,
 }) => RustLib.instance.api.crateFlutterApiFlutterUpdateStatus(

@@ -66,6 +66,48 @@ de travail pour conserver le catalogue. Sinon lancer Flutter avec
 `C:\MONOLITH\data` sous Windows. Ne pas copier ou recréer une base privée dans le
 dépôt. Les profils d'émulateurs sont résolus par Rust sous ce même dossier.
 
+## Configuration locale des manettes (état expérimental)
+
+La gate `feature-parity.json` / `scripts/check_feature_parity.py` contrôle la
+présence d'un service Rust, des deux surfaces egui/Flutter et de tests pour les
+features déclarées ; elle ne prouve ni parité visuelle ni exhaustivité du registre.
+La CI exécute ce contrôle avant les tests Rust, et la CI Flutter valide ses widgets.
+
+Les deux clients proposent « Manettes », une édition contrôlée de
+`<MONOLITH_DATA_DIR>/controllers.toml` et un bouton « RAZ valeurs par défaut »
+par `system_id` et `device_id`. Exemple de profil manuel :
+
+```toml
+[[profile]]
+system_id = 11
+device_id = "xinput:0"
+[profile.buttons]
+a = "0"
+b = "1"
+```
+
+Une seule manette active par console est prise en charge. Les boutons acceptés
+sont `a,b,x,y,start,select,l,r,l2,r2,l3,r3,up,down,left,right`, avec index de
+bouton physique `0..63`. Les IDs XInput sont des slots temporaires ; les IDs
+Linux `jsN` ne sont pas des identifiants matériels persistants. `device_id`
+identifie le profil dans Monolith, mais **ne lie pas encore ce profil à un
+périphérique précis dans RetroArch** : la surcouche s'applique au joueur 1
+sélectionné par RetroArch. La détection liste les périphériques, elle ne
+capture pas encore chaque pression.
+**Aucune correspondance Xbox 360 personnalisée n'est livrée avant réception du
+fichier utilisateur** : la RAZ revient à l'autoconfiguration native de RetroArch.
+
+Lors de l'enregistrement, Rust valide puis génère
+`controllers/retroarch/system-<id>.cfg` ; le lanceur RetroArch y fait référence
+via `--appendconfig` pour la console choisie, sans modifier `retroarch.cfg`.
+La RAZ enlève uniquement cette surcouche et l'entrée Monolith correspondante.
+**PCSX2 2.8 et Xenia ne sont pas synchronisés** : leurs formats de mapping ne
+sont pas interchangeables avec RetroArch. Ajouter des adaptateurs distincts,
+testés avec des fichiers réels et sauvegarde des fichiers utilisateurs, avant de
+revendiquer une synchronisation générale des émulateurs. Les lancements réels
+avec des manettes restent à valider sur Windows et Linux ; mobile non pris en
+charge.
+
 ## Limites avant remplacement d'egui
 
 - Flutter expose la bibliothèque locale du profil de session valide (ou

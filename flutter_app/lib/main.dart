@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'emulator_settings.dart';
+import 'controller_settings.dart';
 import 'library_view.dart';
 import 'login_view.dart';
 import 'src/rust/flutter_api.dart' as api;
@@ -230,6 +231,36 @@ class _MonolithHomeState extends State<_MonolithHome> {
     }
   }
 
+  Future<void> _openControllers() async {
+    final directory = _dataDirectory;
+    if (directory == null) return;
+    try {
+      final config = await api.controllerConfigText(dataDirectory: directory);
+      final devices = await api.detectedControllers();
+      if (!mounted) return;
+      final saved = await showDialog<bool>(
+        context: context,
+        builder: (_) => ControllerSettings(
+          initialConfig: config,
+          detected: devices,
+          onSave: (value) =>
+              api.saveControllerConfig(dataDirectory: directory, value: value),
+          onReset: (id, device) => api.resetControllerConfig(
+            dataDirectory: directory,
+            systemId: id,
+            deviceId: device,
+          ),
+          onReload: () => api.controllerConfigText(dataDirectory: directory),
+        ),
+      );
+      if (mounted && saved == true) {
+        setState(() => _notice = 'Profils des manettes enregistrés');
+      }
+    } catch (error) {
+      if (mounted) setState(() => _notice = 'Configuration manettes : $error');
+    }
+  }
+
   Future<void> _saveBackendUrl(String value) async {
     final directory = _dataDirectory;
     if (directory == null) return;
@@ -326,6 +357,7 @@ class _MonolithHomeState extends State<_MonolithHome> {
           ? _download
           : null,
       onEmulators: _openEmulators,
+      onControllers: _openControllers,
       update: _update,
       onUpdate: _updateMonolith,
       busy: _busy,

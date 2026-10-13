@@ -10,6 +10,7 @@ pub mod client_inventory;
 pub mod client_rom_download;
 pub mod client_rom_upload;
 pub mod client_update;
+pub mod controller_profiles;
 pub mod cover;
 pub mod db;
 pub mod emulator_launcher;

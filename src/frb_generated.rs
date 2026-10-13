@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1768544915;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1623688889;
 
 // Section: executor
 
@@ -118,6 +118,42 @@ fn wire__crate__flutter_api__check_flutter_update_impl(
         },
     )
 }
+fn wire__crate__flutter_api__controller_config_text_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "controller_config_text",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_data_directory = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok =
+                            crate::flutter_api::controller_config_text(api_data_directory)?;
+                        std::result::Result::Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
 fn wire__crate__flutter_api__default_data_directory_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -146,6 +182,40 @@ fn wire__crate__flutter_api__default_data_directory_impl(
                     let output_ok = Ok::<_, ()>(crate::flutter_api::default_data_directory())?;
                     std::result::Result::Ok(output_ok)
                 })())
+            }
+        },
+    )
+}
+fn wire__crate__flutter_api__detected_controllers_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "detected_controllers",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::flutter_api::detected_controllers()?;
+                        std::result::Result::Ok(output_ok)
+                    })(),
+                )
             }
         },
     )
@@ -520,6 +590,47 @@ fn wire__crate__flutter_api__logout_impl(
         },
     )
 }
+fn wire__crate__flutter_api__reset_controller_config_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "reset_controller_config",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_data_directory = <String>::sse_decode(&mut deserializer);
+            let api_system_id = <i64>::sse_decode(&mut deserializer);
+            let api_device_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::flutter_api::reset_controller_config(
+                            api_data_directory,
+                            api_system_id,
+                            api_device_id,
+                        )?;
+                        std::result::Result::Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
 fn wire__crate__flutter_api__save_backend_url_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -550,6 +661,45 @@ fn wire__crate__flutter_api__save_backend_url_impl(
                     (move || {
                         let output_ok =
                             crate::flutter_api::save_backend_url(api_data_directory, api_value)?;
+                        std::result::Result::Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__flutter_api__save_controller_config_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "save_controller_config",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_data_directory = <String>::sse_decode(&mut deserializer);
+            let api_value = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::flutter_api::save_controller_config(
+                            api_data_directory,
+                            api_value,
+                        )?;
                         std::result::Result::Ok(output_ok)
                     })(),
                 )
@@ -728,6 +878,18 @@ impl SseDecode for crate::library_service::LibrarySection {
     }
 }
 
+impl SseDecode for Vec<String> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<String>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::library_service::LibraryGame> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -834,32 +996,45 @@ fn pde_ffi_dispatcher_primary_impl(
         1 => wire__crate__flutter_api__backend_url_impl(port, ptr, rust_vec_len, data_len),
         2 => wire__crate__flutter_api__check_flutter_update_impl(port, ptr, rust_vec_len, data_len),
         3 => {
+            wire__crate__flutter_api__controller_config_text_impl(port, ptr, rust_vec_len, data_len)
+        }
+        4 => {
             wire__crate__flutter_api__default_data_directory_impl(port, ptr, rust_vec_len, data_len)
         }
-        4 => wire__crate__flutter_api__download_flutter_update_impl(
+        5 => wire__crate__flutter_api__detected_controllers_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__flutter_api__download_flutter_update_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        5 => wire__crate__flutter_api__download_library_rom_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__flutter_api__emulator_config_text_impl(port, ptr, rust_vec_len, data_len),
-        7 => {
+        7 => wire__crate__flutter_api__download_library_rom_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__flutter_api__emulator_config_text_impl(port, ptr, rust_vec_len, data_len),
+        9 => {
             wire__crate__flutter_api__flutter_update_status_impl(port, ptr, rust_vec_len, data_len)
         }
-        8 => wire__crate__flutter_api__install_emulator_impl(port, ptr, rust_vec_len, data_len),
-        9 => {
+        10 => wire__crate__flutter_api__install_emulator_impl(port, ptr, rust_vec_len, data_len),
+        11 => {
             wire__crate__flutter_api__install_flutter_update_impl(port, ptr, rust_vec_len, data_len)
         }
-        10 => wire__crate__flutter_api__launch_library_rom_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__flutter_api__load_library_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__flutter_api__login_local_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__flutter_api__logout_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__flutter_api__save_backend_url_impl(port, ptr, rust_vec_len, data_len),
-        15 => {
+        12 => wire__crate__flutter_api__launch_library_rom_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__flutter_api__load_library_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__flutter_api__login_local_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__flutter_api__logout_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__flutter_api__reset_controller_config_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        17 => wire__crate__flutter_api__save_backend_url_impl(port, ptr, rust_vec_len, data_len),
+        18 => {
+            wire__crate__flutter_api__save_controller_config_impl(port, ptr, rust_vec_len, data_len)
+        }
+        19 => {
             wire__crate__flutter_api__save_emulator_config_impl(port, ptr, rust_vec_len, data_len)
         }
-        16 => wire__crate__flutter_api__session_identity_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__flutter_api__session_identity_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1036,6 +1211,16 @@ impl SseEncode for crate::library_service::LibrarySection {
         <i64>::sse_encode(self.system_id, serializer);
         <String>::sse_encode(self.name, serializer);
         <Vec<crate::library_service::LibraryGame>>::sse_encode(self.games, serializer);
+    }
+}
+
+impl SseEncode for Vec<String> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <String>::sse_encode(item, serializer);
+        }
     }
 }
 

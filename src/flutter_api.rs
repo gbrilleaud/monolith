@@ -9,6 +9,38 @@ use crate::{
     session_store::{ClientSession, SessionStore},
 };
 use anyhow::{bail, Context, Result};
+
+pub fn controller_config_text(data_directory: String) -> Result<String> {
+    let root = PathBuf::from(data_directory);
+    Ok(toml::to_string_pretty(
+        &crate::controller_profiles::ControllerConfig::load(&root)?,
+    )?)
+}
+
+pub fn save_controller_config(data_directory: String, value: String) -> Result<()> {
+    if value.len() > 64 * 1024 {
+        bail!("configuration des manettes trop volumineuse");
+    }
+    let config: crate::controller_profiles::ControllerConfig = toml::from_str(&value)?;
+    config.save(&PathBuf::from(data_directory))
+}
+
+pub fn reset_controller_config(
+    data_directory: String,
+    system_id: i64,
+    device_id: String,
+) -> Result<()> {
+    crate::controller_profiles::ControllerConfig::reset(
+        &PathBuf::from(data_directory),
+        system_id,
+        &device_id,
+    )
+}
+
+pub fn detected_controllers() -> Result<Vec<String>> {
+    crate::controller_profiles::detected_controllers()
+}
+
 use chrono::Utc;
 use std::path::{Path, PathBuf};
 

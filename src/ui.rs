@@ -56,6 +56,9 @@ pub struct MonolithApp {
     selected_rom_path: Option<String>,
     client_config_path: PathBuf,
     show_connection_settings: bool,
+    show_controller_settings: bool,
+    controller_draft: String,
+    controller_system_id: i64,
     backend_url_draft: String,
     retroarch_installer: RetroArchInstaller,
     client_update: crate::client_update::ClientUpdate,
@@ -113,10 +116,60 @@ impl MonolithApp {
             selected_rom_path: None,
             client_config_path,
             show_connection_settings: false,
+            show_controller_settings: false,
+            controller_draft: String::new(),
+            controller_system_id: 11,
             backend_url_draft,
             retroarch_installer: RetroArchInstaller::new(),
             client_update: crate::client_update::ClientUpdate::new(update_data_dir),
         }
+    }
+
+    fn render_controller_settings(&mut self, context: &egui::Context) {
+        if !self.show_controller_settings {
+            return;
+        }
+        let root = self
+            .client_config_path
+            .parent()
+            .unwrap_or(std::path::Path::new("data"));
+        let mut open = self.show_controller_settings;
+        egui::Window::new("Manettes par console").open(&mut open).resizable(true).show(context, |ui| {
+            ui.label("Manettes détectées localement (ID de session) :");
+            match crate::controller_profiles::detected_controllers() {
+                Ok(devices) if devices.is_empty() => { ui.label("Aucune manette détectée"); }
+                Ok(devices) => { for device in devices { ui.label(device); } }
+                Err(error) => { ui.label(format!("Détection indisponible : {error}")); }
+            }
+            ui.label("Un profil actif par console : system_id, device_id puis [profile.buttons] (a = '0', etc.).");
+            ui.label("RetroArch : export automatique par console au lancement ; PCSX2/Xenia : mapping non pris en charge.");
+            ui.add(egui::TextEdit::multiline(&mut self.controller_draft).desired_rows(12).desired_width(530.0));
+            if ui.button("Enregistrer les profils").clicked() {
+                self.notice = Some(match crate::flutter_api::save_controller_config(root.to_string_lossy().into_owned(), self.controller_draft.clone()) {
+                    Ok(()) => "Profils des manettes enregistrés".into(),
+                    Err(error) => format!("Configuration manettes refusée : {error}"),
+                });
+            }
+            ui.horizontal(|ui| {
+                ui.label("Console (ID)");
+                ui.add(egui::DragValue::new(&mut self.controller_system_id).range(1..=i64::MAX));
+                if ui.button("RAZ valeurs par défaut").clicked() {
+                    let result = crate::controller_profiles::ControllerConfig::load(root).and_then(|config| {
+                        let profile = config.profiles.iter().find(|p| p.system_id == self.controller_system_id)
+                            .ok_or_else(|| anyhow::anyhow!("aucun profil actif pour cette console"))?;
+                        crate::controller_profiles::ControllerConfig::reset(root, self.controller_system_id, &profile.device_id)
+                    });
+                    self.notice = Some(match result {
+                        Ok(()) => {
+                            self.controller_draft = crate::flutter_api::controller_config_text(root.to_string_lossy().into_owned()).unwrap_or_default();
+                            "Profil supprimé : retour à la configuration par défaut RetroArch".into()
+                        }
+                        Err(error) => format!("RAZ refusée : {error}"),
+                    });
+                }
+            });
+        });
+        self.show_controller_settings = open;
     }
 
     fn render_connection_settings(&mut self, context: &egui::Context) {
@@ -736,6 +789,7 @@ impl eframe::App for MonolithApp {
         }
         self.auth.poll();
         self.render_connection_settings(context);
+        self.render_controller_settings(context);
         self.import_remote_cache_for_active_user();
         if let Some(result) = self.auth.poll_override_sync() {
             if result.is_ok() {
@@ -794,6 +848,23 @@ impl eframe::App for MonolithApp {
                 if ui.button("Paramètres serveur").clicked() {
                     self.backend_url_draft = self.auth.backend_url().into();
                     self.show_connection_settings = true;
+                }
+                if ui.button("Manettes").clicked() {
+                    let root = self
+                        .client_config_path
+                        .parent()
+                        .unwrap_or(std::path::Path::new("data"));
+                    match crate::flutter_api::controller_config_text(
+                        root.to_string_lossy().into_owned(),
+                    ) {
+                        Ok(text) => {
+                            self.controller_draft = text;
+                            self.show_controller_settings = true;
+                        }
+                        Err(error) => {
+                            self.notice = Some(format!("Configuration manettes : {error}"));
+                        }
+                    }
                 }
                 if ui.button("Installer RetroArch").clicked() {
                     self.install_retroarch();
