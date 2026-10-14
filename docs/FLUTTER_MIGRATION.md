@@ -108,6 +108,20 @@ revendiquer une synchronisation générale des émulateurs. Les lancements réel
 avec des manettes restent à valider sur Windows et Linux ; mobile non pris en
 charge.
 
+## Animation de lancement Mega Drive (Flutter uniquement)
+
+Dans la bibliothèque Flutter (grille et liste), cliquer sur « Lancer » pour une
+console nommée Mega Drive/Genesis affiche pendant 2,2 secondes une console et
+une cartouche vectorielles en perspective. L'étiquette utilise `coverUri` du jeu
+(`file://` ou HTTP(S), avec pictogramme de repli). Le lancement réel est ensuite
+transmis au même service Rust qu'avant ; aucune nouvelle règle d'émulation
+n'est implémentée en Dart. Une vue détruite avant la fin annule le lancement.
+C'est une présentation spécifique à Flutter demandée pour Mega Drive, **pas une
+fonctionnalité métier commune** soumise à la gate egui/Flutter. Les autres
+consoles et egui conservent leur lancement existant. Le rendu 3D est stylisé en
+perspective, sans moteur 3D ni modèle matériel exact ; l'aspect natif et le
+calage sur un véritable émulateur restent à vérifier sur poste client.
+
 ## Limites avant remplacement d'egui
 
 - Flutter expose la bibliothèque locale du profil de session valide (ou

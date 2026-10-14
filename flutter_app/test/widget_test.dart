@@ -201,6 +201,99 @@ void main() {
     expect((card.decoration! as BoxDecoration).borderRadius, isNull);
   });
 
+  testWidgets(
+    'Mega Drive : cartouche avec jaquette, lancement différé unique',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final launches = <String>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MonolithLibraryView(
+            sections: const [
+              LibrarySection(
+                systemId: 11,
+                name: 'Mega Drive',
+                games: [
+                  LibraryGame(
+                    systemId: 11,
+                    title: 'Sonic',
+                    path: '/roms/sonic.md',
+                    coverUri: 'https://example.invalid/sonic.png',
+                    available: true,
+                    description: '',
+                  ),
+                ],
+              ),
+            ],
+            onLaunch: launches.add,
+          ),
+        ),
+      );
+      await tester.tap(find.text('Lancer'));
+      await tester.pump();
+      expect(find.byKey(const Key('megadrive-launch-scene')), findsOneWidget);
+      final cartridgeArt = tester.widget<Image>(
+        find.descendant(
+          of: find.byKey(const Key('megadrive-cartridge-label')),
+          matching: find.byType(Image),
+        ),
+      );
+      expect(
+        (cartridgeArt.image as NetworkImage).url,
+        'https://example.invalid/sonic.png',
+      );
+      expect(launches, isEmpty);
+      await tester.pump(const Duration(milliseconds: 1100));
+      expect(launches, isEmpty);
+      await tester.pump(const Duration(milliseconds: 1100));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(launches, ['/roms/sonic.md']);
+      expect(find.byKey(const Key('megadrive-launch-scene')), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('Mega Drive : lancement annulé si la vue disparaît', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final launches = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MonolithLibraryView(
+          sections: const [
+            LibrarySection(
+              systemId: 11,
+              name: 'Sega Genesis',
+              games: [
+                LibraryGame(
+                  systemId: 11,
+                  title: 'Sonic',
+                  path: '/roms/sonic.md',
+                  available: true,
+                  description: '',
+                ),
+              ],
+            ),
+          ],
+          onLaunch: launches.add,
+        ),
+      ),
+    );
+    await tester.tap(find.text('Lancer'));
+    await tester.pump();
+    expect(find.byKey(const Key('megadrive-launch-scene')), findsOneWidget);
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    await tester.pump(const Duration(seconds: 3));
+    expect(launches, isEmpty);
+  });
+
   testWidgets('la session active est identifiée et peut être fermée', (
     tester,
   ) async {

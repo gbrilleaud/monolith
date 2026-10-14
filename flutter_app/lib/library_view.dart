@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'src/rust/flutter_api.dart';
 import 'src/rust/library_service.dart';
+import 'megadrive_launch_scene.dart';
 
 const _background = Color(0xFF080C15);
 const _surface = Color(0xFF141B29);
@@ -50,136 +51,174 @@ class MonolithLibraryView extends StatefulWidget {
 
 class _MonolithLibraryViewState extends State<MonolithLibraryView> {
   bool _list = false;
+  LibraryGame? _launchingGame;
+
+  void _launchGame(LibraryGame game, String systemName) {
+    if (widget.busy || _launchingGame != null) return;
+    final normalized = systemName.toLowerCase().replaceAll(
+      RegExp(r'[\s_-]'),
+      '',
+    );
+    if (normalized.contains('megadrive') || normalized.contains('genesis')) {
+      setState(() => _launchingGame = game);
+    } else {
+      widget.onLaunch(game.path);
+    }
+  }
+
+  void _completeMegaDriveLaunch() {
+    final game = _launchingGame;
+    if (game == null || !mounted) return;
+    setState(() => _launchingGame = null);
+    widget.onLaunch(game.path);
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _background,
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 900;
-            final content = CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(child: _header(context, wide)),
-                if (widget.busy)
-                  const SliverToBoxAdapter(
-                    child: LinearProgressIndicator(color: _accent),
-                  ),
-                if (widget.notice != null)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 8,
+      body: Stack(
+        children: [
+          SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final wide = constraints.maxWidth >= 900;
+                final content = CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(child: _header(context, wide)),
+                    if (widget.busy)
+                      const SliverToBoxAdapter(
+                        child: LinearProgressIndicator(color: _accent),
                       ),
-                      child: Text(
-                        widget.notice!,
-                        style: const TextStyle(color: Color(0xFFFFC578)),
-                      ),
-                    ),
-                  ),
-                if (widget.sections.isEmpty)
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.videogame_asset_outlined,
-                            color: _accent,
-                            size: 54,
+                    if (widget.notice != null)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 8,
                           ),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'Votre bibliothèque attend sa première synchronisation.',
+                          child: Text(
+                            widget.notice!,
+                            style: const TextStyle(color: Color(0xFFFFC578)),
                           ),
-                          const SizedBox(height: 16),
-                          OutlinedButton(
-                            onPressed: widget.onRefresh,
-                            child: const Text('Actualiser'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                for (final section in widget.sections)
-                  SliverToBoxAdapter(
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 280),
-                      switchInCurve: Curves.easeOutCubic,
-                      child: KeyedSubtree(
-                        key: ValueKey(
-                          '${section.systemId}:${section.games.map((game) => game.gameId).join(',')}',
                         ),
-                        child: _section(context, section),
                       ),
-                    ),
-                  ),
-                const SliverToBoxAdapter(child: SizedBox(height: 36)),
-              ],
-            );
-            return wide
-                ? Row(
-                    children: [
-                      SizedBox(
-                        width: 224,
-                        child: Container(
-                          color: _surface,
-                          child: SafeArea(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Padding(
-                                  padding: EdgeInsets.all(26),
-                                  child: Text(
-                                    'MONOLITH',
-                                    style: TextStyle(
-                                      fontSize: 21,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 3,
-                                      color: _accent,
+                    if (widget.sections.isEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.videogame_asset_outlined,
+                                color: _accent,
+                                size: 54,
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'Votre bibliothèque attend sa première synchronisation.',
+                              ),
+                              const SizedBox(height: 16),
+                              OutlinedButton(
+                                onPressed: widget.onRefresh,
+                                child: const Text('Actualiser'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    for (final section in widget.sections)
+                      SliverToBoxAdapter(
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 280),
+                          switchInCurve: Curves.easeOutCubic,
+                          child: KeyedSubtree(
+                            key: ValueKey(
+                              '${section.systemId}:${section.games.map((game) => game.gameId).join(',')}',
+                            ),
+                            child: _section(context, section),
+                          ),
+                        ),
+                      ),
+                    const SliverToBoxAdapter(child: SizedBox(height: 36)),
+                  ],
+                );
+                return wide
+                    ? Row(
+                        children: [
+                          SizedBox(
+                            width: 224,
+                            child: Container(
+                              color: _surface,
+                              child: SafeArea(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Padding(
+                                      padding: EdgeInsets.all(26),
+                                      child: Text(
+                                        'MONOLITH',
+                                        style: TextStyle(
+                                          fontSize: 21,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 3,
+                                          color: _accent,
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                    const Divider(color: Colors.white12),
+                                    const Padding(
+                                      padding: EdgeInsets.fromLTRB(
+                                        24,
+                                        18,
+                                        0,
+                                        10,
+                                      ),
+                                      child: Text(
+                                        'CONSOLES',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          letterSpacing: 2,
+                                          color: Colors.white54,
+                                        ),
+                                      ),
+                                    ),
+                                    for (final section in widget.sections)
+                                      ListTile(
+                                        leading: const Icon(
+                                          Icons.sports_esports_outlined,
+                                        ),
+                                        title: Text(
+                                          section.name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        subtitle: Text(
+                                          '${section.games.length} jeux',
+                                        ),
+                                      ),
+                                  ],
                                 ),
-                                const Divider(color: Colors.white12),
-                                const Padding(
-                                  padding: EdgeInsets.fromLTRB(24, 18, 0, 10),
-                                  child: Text(
-                                    'CONSOLES',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      letterSpacing: 2,
-                                      color: Colors.white54,
-                                    ),
-                                  ),
-                                ),
-                                for (final section in widget.sections)
-                                  ListTile(
-                                    leading: const Icon(
-                                      Icons.sports_esports_outlined,
-                                    ),
-                                    title: Text(
-                                      section.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    subtitle: Text(
-                                      '${section.games.length} jeux',
-                                    ),
-                                  ),
-                              ],
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      Expanded(child: content),
-                    ],
-                  )
-                : content;
-          },
-        ),
+                          Expanded(child: content),
+                        ],
+                      )
+                    : content;
+              },
+            ),
+          ),
+          if (_launchingGame case final game?)
+            Positioned.fill(
+              child: MegaDriveLaunchScene(
+                title: game.title,
+                coverUri: game.coverUri,
+                onFinished: _completeMegaDriveLaunch,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -379,7 +418,7 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
                           ),
                           trailing: _gameAction(
                             game,
-                            widget.onLaunch,
+                            (path) => _launchGame(game, section.name),
                             widget.onDownload,
                             widget.busy,
                           ),
@@ -404,7 +443,8 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
                       itemCount: section.games.length,
                       itemBuilder: (context, index) => _GameCard(
                         game: section.games[index],
-                        onLaunch: widget.onLaunch,
+                        onLaunch: (path) =>
+                            _launchGame(section.games[index], section.name),
                         onDownload: widget.onDownload,
                         busy: widget.busy,
                       ),
