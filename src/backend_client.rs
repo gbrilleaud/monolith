@@ -3,6 +3,7 @@ use crate::{
     cache::write_cache_atomic,
     models::{CacheSnapshot, UserOverride},
     rom_bundle::RomBundle,
+    style_config::{parse_style_catalog, read_style_response, StyleCatalog},
 };
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -88,6 +89,22 @@ impl BackendClient {
             .json()
             .await
             .context("catalogue invalide")
+    }
+
+    pub async fn fetch_styles(&self) -> Result<StyleCatalog> {
+        let response = self
+            .http
+            .get(format!("{}/api/v1/styles", self.base_url))
+            .timeout(std::time::Duration::from_secs(3))
+            .send()
+            .await
+            .context("backend inaccessible")?
+            .error_for_status()
+            .context("catalogue de styles refusé")?;
+        let bytes = read_style_response(response)
+            .await
+            .context("lecture du catalogue de styles")?;
+        parse_style_catalog(&bytes).context("catalogue de styles invalide")
     }
 
     pub async fn identity(&self, bearer_token: &str) -> Result<IdentityResponse> {

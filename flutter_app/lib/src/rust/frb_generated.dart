@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 1623688889;
+  int get rustContentHash => -1901059637;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -137,11 +137,15 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateFlutterApiLogout({required String dataDirectory});
 
+  Future<String> crateFlutterApiRefreshStyles({required String dataDirectory});
+
   Future<void> crateFlutterApiResetControllerConfig({
     required String dataDirectory,
     required PlatformInt64 systemId,
     required String deviceId,
   });
+
+  Future<String> crateFlutterApiResetStyle({required String dataDirectory});
 
   Future<void> crateFlutterApiSaveBackendUrl({
     required String dataDirectory,
@@ -153,12 +157,31 @@ abstract class RustLibApi extends BaseApi {
     required String value,
   });
 
+  Future<String> crateFlutterApiSaveCustomStyle({
+    required String dataDirectory,
+    required String json,
+  });
+
   Future<void> crateFlutterApiSaveEmulatorConfig({
     required String dataDirectory,
     required String value,
   });
 
+  Future<String> crateFlutterApiSelectStyle({
+    required String dataDirectory,
+    required String id,
+  });
+
   Future<FlutterIdentity?> crateFlutterApiSessionIdentity({
+    required String dataDirectory,
+  });
+
+  Future<String> crateFlutterApiSetCartridgeAnimation({
+    required String dataDirectory,
+    required bool enabled,
+  });
+
+  Future<String> crateFlutterApiStyleSnapshotJson({
     required String dataDirectory,
   });
 }
@@ -657,6 +680,37 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "logout", argNames: ["dataDirectory"]);
 
   @override
+  Future<String> crateFlutterApiRefreshStyles({required String dataDirectory}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dataDirectory, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 16,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateFlutterApiRefreshStylesConstMeta,
+        argValues: [dataDirectory],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateFlutterApiRefreshStylesConstMeta =>
+      const TaskConstMeta(
+        debugName: "refresh_styles",
+        argNames: ["dataDirectory"],
+      );
+
+  @override
   Future<void> crateFlutterApiResetControllerConfig({
     required String dataDirectory,
     required PlatformInt64 systemId,
@@ -672,7 +726,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 17,
             port: port_,
           );
         },
@@ -694,6 +748,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<String> crateFlutterApiResetStyle({required String dataDirectory}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dataDirectory, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 18,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateFlutterApiResetStyleConstMeta,
+        argValues: [dataDirectory],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateFlutterApiResetStyleConstMeta => const TaskConstMeta(
+    debugName: "reset_style",
+    argNames: ["dataDirectory"],
+  );
+
+  @override
   Future<void> crateFlutterApiSaveBackendUrl({
     required String dataDirectory,
     required String value,
@@ -707,7 +791,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 19,
             port: port_,
           );
         },
@@ -742,7 +826,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 18,
+            funcId: 20,
             port: port_,
           );
         },
@@ -764,6 +848,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<String> crateFlutterApiSaveCustomStyle({
+    required String dataDirectory,
+    required String json,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dataDirectory, serializer);
+          sse_encode_String(json, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 21,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateFlutterApiSaveCustomStyleConstMeta,
+        argValues: [dataDirectory, json],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateFlutterApiSaveCustomStyleConstMeta =>
+      const TaskConstMeta(
+        debugName: "save_custom_style",
+        argNames: ["dataDirectory", "json"],
+      );
+
+  @override
   Future<void> crateFlutterApiSaveEmulatorConfig({
     required String dataDirectory,
     required String value,
@@ -777,7 +896,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 19,
+            funcId: 22,
             port: port_,
           );
         },
@@ -799,6 +918,40 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<String> crateFlutterApiSelectStyle({
+    required String dataDirectory,
+    required String id,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dataDirectory, serializer);
+          sse_encode_String(id, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 23,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateFlutterApiSelectStyleConstMeta,
+        argValues: [dataDirectory, id],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateFlutterApiSelectStyleConstMeta => const TaskConstMeta(
+    debugName: "select_style",
+    argNames: ["dataDirectory", "id"],
+  );
+
+  @override
   Future<FlutterIdentity?> crateFlutterApiSessionIdentity({
     required String dataDirectory,
   }) {
@@ -810,7 +963,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 24,
             port: port_,
           );
         },
@@ -828,6 +981,74 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateFlutterApiSessionIdentityConstMeta =>
       const TaskConstMeta(
         debugName: "session_identity",
+        argNames: ["dataDirectory"],
+      );
+
+  @override
+  Future<String> crateFlutterApiSetCartridgeAnimation({
+    required String dataDirectory,
+    required bool enabled,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dataDirectory, serializer);
+          sse_encode_bool(enabled, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 25,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateFlutterApiSetCartridgeAnimationConstMeta,
+        argValues: [dataDirectory, enabled],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateFlutterApiSetCartridgeAnimationConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_cartridge_animation",
+        argNames: ["dataDirectory", "enabled"],
+      );
+
+  @override
+  Future<String> crateFlutterApiStyleSnapshotJson({
+    required String dataDirectory,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dataDirectory, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 26,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateFlutterApiStyleSnapshotJsonConstMeta,
+        argValues: [dataDirectory],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateFlutterApiStyleSnapshotJsonConstMeta =>
+      const TaskConstMeta(
+        debugName: "style_snapshot_json",
         argNames: ["dataDirectory"],
       );
 

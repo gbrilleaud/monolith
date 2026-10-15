@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:monolith/library_view.dart';
+import 'package:monolith/style_theme.dart';
 import 'package:monolith/src/rust/flutter_api.dart';
 import 'package:monolith/src/rust/library_service.dart';
 
 void main() {
   testWidgets(
-    'boutons émulateurs et manettes restent accessibles sur écran étroit',
+    'boutons émulateurs, manettes et apparence accessibles sur écran étroit',
     (tester) async {
       tester.view.physicalSize = const Size(320, 844);
       tester.view.devicePixelRatio = 1;
@@ -14,6 +15,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       var emulatorClicks = 0;
       var controllerClicks = 0;
+      var styleClicks = 0;
       await tester.pumpWidget(
         MaterialApp(
           home: MonolithLibraryView(
@@ -21,14 +23,17 @@ void main() {
             onLaunch: (_) {},
             onEmulators: () => emulatorClicks++,
             onControllers: () => controllerClicks++,
+            onStyle: () => styleClicks++,
           ),
         ),
       );
       expect(tester.takeException(), isNull);
       await tester.tap(find.text('Émulateurs'));
       await tester.tap(find.text('Manettes'));
+      await tester.tap(find.text('Apparence'));
       expect(emulatorClicks, 1);
       expect(controllerClicks, 1);
+      expect(styleClicks, 1);
     },
   );
   testWidgets(
@@ -198,7 +203,57 @@ void main() {
           .ancestor(of: find.text('Sonic'), matching: find.byType(Container))
           .first,
     );
-    expect((card.decoration! as BoxDecoration).borderRadius, isNull);
+    expect((card.decoration! as BoxDecoration).borderRadius, BorderRadius.zero);
+  });
+
+  testWidgets('bibliothèque applique palette et écartement des tuiles', (
+    tester,
+  ) async {
+    final theme = ThemeData.light().copyWith(
+      scaffoldBackgroundColor: const Color(0xFFF8EAD0),
+      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF13579B)),
+      extensions: const [
+        StyleTokens(
+          tileSpacing: 19,
+          cornerRadius: 4,
+          surfaceRaised: Color(0xFFE3D2C1),
+          textMuted: Color(0xFF777777),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: theme,
+        home: MonolithLibraryView(
+          sections: const [
+            LibrarySection(
+              systemId: 11,
+              name: 'Mega Drive',
+              games: [
+                LibraryGame(
+                  systemId: 11,
+                  title: 'Sonic',
+                  path: '/roms/sonic.md',
+                  available: true,
+                  description: '',
+                ),
+              ],
+            ),
+          ],
+          onLaunch: (_) {},
+        ),
+      ),
+    );
+    expect(
+      tester.widget<Scaffold>(find.byType(Scaffold)).backgroundColor,
+      const Color(0xFFF8EAD0),
+    );
+    final grid = tester.widget<GridView>(find.byType(GridView));
+    expect(
+      (grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount)
+          .crossAxisSpacing,
+      19,
+    );
   });
 
   testWidgets(
@@ -255,6 +310,43 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('Mega Drive : animation désactivée lance immédiatement', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final launches = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MonolithLibraryView(
+          sections: const [
+            LibrarySection(
+              systemId: 11,
+              name: 'Mega Drive',
+              games: [
+                LibraryGame(
+                  systemId: 11,
+                  title: 'Sonic',
+                  path: '/roms/sonic.md',
+                  available: true,
+                  description: '',
+                ),
+              ],
+            ),
+          ],
+          onLaunch: launches.add,
+          cartridgeAnimation: false,
+        ),
+      ),
+    );
+    await tester.tap(find.text('Lancer'));
+    await tester.pump();
+    expect(launches, ['/roms/sonic.md']);
+    expect(find.byKey(const Key('megadrive-launch-scene')), findsNothing);
+  });
 
   testWidgets('Mega Drive : lancement annulé si la vue disparaît', (
     tester,

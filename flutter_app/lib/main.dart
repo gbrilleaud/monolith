@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,8 @@ import 'emulator_settings.dart';
 import 'controller_settings.dart';
 import 'library_view.dart';
 import 'login_view.dart';
+import 'style_settings.dart';
+import 'style_theme.dart';
 import 'src/rust/flutter_api.dart' as api;
 import 'src/rust/flutter_api.dart' show FlutterIdentity, FlutterUpdateStatus;
 import 'src/rust/frb_generated.dart';
@@ -18,28 +21,62 @@ Future<void> main() async {
   runApp(const MonolithApp());
 }
 
-class MonolithApp extends StatelessWidget {
+class MonolithApp extends StatefulWidget {
   const MonolithApp({super.key});
+
+  @override
+  State<MonolithApp> createState() => _MonolithAppState();
+}
+
+class _MonolithAppState extends State<MonolithApp> {
+  StyleTheme _style = StyleTheme.fallback;
+  String? _dataDirectory;
+  int _styleGeneration = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStyle();
+  }
+
+  Future<void> _loadStyle() async {
+    final generation = _styleGeneration;
+    try {
+      final root = await api.defaultDataDirectory();
+      if (mounted) setState(() => _dataDirectory = root);
+      final snapshot = await api.styleSnapshotJson(dataDirectory: root);
+      if (mounted && generation == _styleGeneration) {
+        setState(() {
+          _style = StyleTheme.fromSnapshot(snapshot);
+        });
+      }
+    } catch (_) {
+      // Keep the bundled dark presentation if the local JSON is unreadable.
+    }
+  }
+
+  void _styleChanged(String snapshot) {
+    if (mounted) {
+      setState(() {
+        _styleGeneration++;
+        _style = StyleTheme.fromSnapshot(snapshot);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'Monolith',
     debugShowCheckedModeBanner: false,
-    theme: ThemeData.dark(useMaterial3: true).copyWith(
-      scaffoldBackgroundColor: const Color(0xFF080C15),
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF67D6DA),
-        brightness: Brightness.dark,
-        surface: const Color(0xFF141B29),
-      ),
-      textTheme: ThemeData.dark().textTheme.apply(fontFamily: 'Roboto'),
-    ),
-    home: const _MonolithHome(),
+    theme: _style.toThemeData(dataDirectory: _dataDirectory),
+    home: _MonolithHome(style: _style, onStyleChanged: _styleChanged),
   );
 }
 
 class _MonolithHome extends StatefulWidget {
-  const _MonolithHome();
+  const _MonolithHome({required this.style, required this.onStyleChanged});
+  final StyleTheme style;
+  final ValueChanged<String> onStyleChanged;
   @override
   State<_MonolithHome> createState() => _MonolithHomeState();
 }
@@ -231,6 +268,33 @@ class _MonolithHomeState extends State<_MonolithHome> {
     }
   }
 
+  Future<void> _openStyle() async {
+    final root = _dataDirectory;
+    if (root == null) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        child: SizedBox(
+          width: 680,
+          height: MediaQuery.sizeOf(dialogContext).height * 0.82,
+          child: StyleSettings(
+            snapshotJson: jsonEncode(widget.style.snapshot),
+            onChanged: widget.onStyleChanged,
+            onSelect: (id) => api.selectStyle(dataDirectory: root, id: id),
+            onAnimation: (enabled) => api.setCartridgeAnimation(
+              dataDirectory: root,
+              enabled: enabled,
+            ),
+            onRefresh: () => api.refreshStyles(dataDirectory: root),
+            onReset: () => api.resetStyle(dataDirectory: root),
+            onSaveCustom: (json) =>
+                api.saveCustomStyle(dataDirectory: root, json: json),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _openControllers() async {
     final directory = _dataDirectory;
     if (directory == null) return;
@@ -341,6 +405,7 @@ class _MonolithHomeState extends State<_MonolithHome> {
         onSaveBackendUrl: _saveBackendUrl,
         onLogin: _login,
         onOffline: () => setState(() => _offline = true),
+        onStyle: _dataDirectory == null ? null : _openStyle,
         busy: _busy,
         notice: _notice,
       );
@@ -358,6 +423,8 @@ class _MonolithHomeState extends State<_MonolithHome> {
           : null,
       onEmulators: _openEmulators,
       onControllers: _openControllers,
+      onStyle: _openStyle,
+      cartridgeAnimation: widget.style.cartridgeAnimation,
       update: _update,
       onUpdate: _updateMonolith,
       busy: _busy,

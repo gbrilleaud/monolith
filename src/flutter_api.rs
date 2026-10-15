@@ -10,6 +10,43 @@ use crate::{
 };
 use anyhow::{bail, Context, Result};
 
+pub fn reset_style(data_directory: String) -> Result<String> {
+    Ok(serde_json::to_string(
+        &crate::style_config::StyleStore::reset(&PathBuf::from(data_directory))?,
+    )?)
+}
+
+pub fn style_snapshot_json(data_directory: String) -> Result<String> {
+    Ok(serde_json::to_string(
+        &crate::style_config::StyleStore::load(&PathBuf::from(data_directory))?,
+    )?)
+}
+
+pub fn select_style(data_directory: String, id: String) -> Result<String> {
+    Ok(serde_json::to_string(
+        &crate::style_config::StyleStore::select(&PathBuf::from(data_directory), &id)?,
+    )?)
+}
+
+pub fn set_cartridge_animation(data_directory: String, enabled: bool) -> Result<String> {
+    Ok(serde_json::to_string(
+        &crate::style_config::StyleStore::set_animation(&PathBuf::from(data_directory), enabled)?,
+    )?)
+}
+
+pub fn save_custom_style(data_directory: String, json: String) -> Result<String> {
+    Ok(serde_json::to_string(
+        &crate::style_config::StyleStore::save_custom_json(&PathBuf::from(data_directory), &json)?,
+    )?)
+}
+
+pub fn refresh_styles(data_directory: String) -> Result<String> {
+    let url = backend_url(data_directory.clone())?;
+    Ok(serde_json::to_string(
+        &crate::style_config::StyleStore::refresh(&PathBuf::from(data_directory), &url)?,
+    )?)
+}
+
 pub fn controller_config_text(data_directory: String) -> Result<String> {
     let root = PathBuf::from(data_directory);
     Ok(toml::to_string_pretty(

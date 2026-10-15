@@ -91,6 +91,9 @@ fn main() -> eframe::Result<()> {
         Box::new(move |creation_context| {
             egui_extras::install_image_loaders(&creation_context.egui_ctx);
             monolith::theme::install(&creation_context.egui_ctx);
+            if let Ok(snapshot) = monolith::style_config::StyleStore::load(&data_dir) {
+                monolith::theme::install_style(&creation_context.egui_ctx, &snapshot.resolved);
+            }
             Ok(Box::new(MonolithApp::new(
                 database,
                 auth,

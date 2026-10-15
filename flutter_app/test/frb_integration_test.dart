@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -20,6 +21,32 @@ void main() {
         );
         expect(sections, isEmpty);
         expect(await File('${directory.path}/monolith.db').exists(), isTrue);
+        final style = jsonDecode(
+          await api.styleSnapshotJson(dataDirectory: directory.path),
+        ) as Map<String, dynamic>;
+        expect((style['catalog'] as Map)['presets'], hasLength(7));
+        expect(style['selected'], 'dark');
+        final selected = jsonDecode(
+          await api.selectStyle(dataDirectory: directory.path, id: 'light'),
+        ) as Map<String, dynamic>;
+        expect(selected['resolved']['id'], 'light');
+        final animation = jsonDecode(
+          await api.setCartridgeAnimation(
+            dataDirectory: directory.path,
+            enabled: false,
+          ),
+        ) as Map<String, dynamic>;
+        expect(animation['cartridge_animation'], isFalse);
+        await File('${directory.path}/style.json').writeAsString('{broken');
+        await expectLater(
+          api.styleSnapshotJson(dataDirectory: directory.path),
+          throwsA(isA<Exception>()),
+        );
+        final recovered = jsonDecode(
+          await api.resetStyle(dataDirectory: directory.path),
+        ) as Map<String, dynamic>;
+        expect(recovered['selected'], 'dark');
+        expect(recovered['cartridge_animation'], isTrue);
         expect(
           await api.sessionIdentity(dataDirectory: directory.path),
           isNull,

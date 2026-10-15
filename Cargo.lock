@@ -2987,6 +2987,7 @@ dependencies = [
  "eframe",
  "egui_extras",
  "flutter_rust_bridge",
+ "futures-util",
  "image",
  "jsonwebtoken",
  "rand 0.8.8",

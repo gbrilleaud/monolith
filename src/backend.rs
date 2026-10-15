@@ -3,6 +3,7 @@ use crate::{
     backend_config::BackendConfig,
     db::Database,
     models::{CacheSnapshot, ScanRoot, UserOverride},
+    style_config::{bundled_style_catalog, parse_style_catalog, StyleCatalog, MAX_CATALOG_BYTES},
 };
 use axum::{
     body::{to_bytes, Body},
@@ -25,6 +26,7 @@ use std::{
 pub struct BackendState {
     pub config: Arc<BackendConfig>,
     pub database_path: PathBuf,
+    pub config_directory: PathBuf,
 }
 
 impl BackendState {
@@ -43,6 +45,7 @@ impl BackendState {
         Ok(Self {
             config: Arc::new(config),
             database_path,
+            config_directory: config_directory.to_path_buf(),
         })
     }
 
@@ -54,6 +57,7 @@ impl BackendState {
 pub fn router(state: BackendState) -> Router {
     Router::new()
         .route("/api/v1/health", get(health))
+        .route("/api/v1/styles", get(styles))
         .route("/api/v1/auth/login", post(local_login))
         .route("/api/v1/auth/me", get(identity))
         .route("/api/v1/catalog", get(catalog))
@@ -82,6 +86,22 @@ async fn health(State(state): State<BackendState>) -> Json<HealthResponse> {
         status: "ok".into(),
         auth_mode: state.config.auth.mode,
     })
+}
+
+async fn styles(State(state): State<BackendState>) -> Json<StyleCatalog> {
+    let path = state.config_directory.join("style-presets.json");
+    let configured = tokio::task::spawn_blocking(move || {
+        let size = std::fs::metadata(&path).ok()?.len();
+        if size > MAX_CATALOG_BYTES as u64 {
+            return None;
+        }
+        let bytes = std::fs::read(path).ok()?;
+        parse_style_catalog(&bytes).ok()
+    })
+    .await
+    .ok()
+    .flatten();
+    Json(configured.unwrap_or_else(bundled_style_catalog))
 }
 
 #[derive(Debug, Serialize, Deserialize)]

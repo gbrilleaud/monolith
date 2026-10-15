@@ -5,10 +5,7 @@ import 'package:flutter/material.dart';
 import 'src/rust/flutter_api.dart';
 import 'src/rust/library_service.dart';
 import 'megadrive_launch_scene.dart';
-
-const _background = Color(0xFF080C15);
-const _surface = Color(0xFF141B29);
-const _accent = Color(0xFF67D6DA);
+import 'style_theme.dart';
 
 /// Présentation pure : les jeux, filtres et autorisations viennent de Rust.
 class MonolithLibraryView extends StatefulWidget {
@@ -19,6 +16,7 @@ class MonolithLibraryView extends StatefulWidget {
     this.onDownload,
     this.onEmulators,
     this.onControllers,
+    this.onStyle,
     this.update,
     this.onUpdate,
     this.onSearchChanged,
@@ -28,6 +26,7 @@ class MonolithLibraryView extends StatefulWidget {
     this.onLogin,
     this.busy = false,
     this.notice,
+    this.cartridgeAnimation = true,
   });
 
   final List<LibrarySection> sections;
@@ -35,6 +34,7 @@ class MonolithLibraryView extends StatefulWidget {
   final ValueChanged<int>? onDownload;
   final VoidCallback? onEmulators;
   final VoidCallback? onControllers;
+  final VoidCallback? onStyle;
   final FlutterUpdateStatus? update;
   final VoidCallback? onUpdate;
   final ValueChanged<String>? onSearchChanged;
@@ -44,6 +44,7 @@ class MonolithLibraryView extends StatefulWidget {
   final VoidCallback? onLogin;
   final bool busy;
   final String? notice;
+  final bool cartridgeAnimation;
 
   @override
   State<MonolithLibraryView> createState() => _MonolithLibraryViewState();
@@ -59,7 +60,8 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
       RegExp(r'[\s_-]'),
       '',
     );
-    if (normalized.contains('megadrive') || normalized.contains('genesis')) {
+    if (widget.cartridgeAnimation &&
+        (normalized.contains('megadrive') || normalized.contains('genesis'))) {
       setState(() => _launchingGame = game);
     } else {
       widget.onLaunch(game.path);
@@ -75,10 +77,23 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = theme.extension<StyleTokens>();
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Stack(
         children: [
+          if (tokens?.backgroundImage case final path?)
+            Positioned.fill(
+              child: Opacity(
+                opacity: 0.23,
+                child: Image.file(
+                  File(path),
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                ),
+              ),
+            ),
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -87,8 +102,10 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
                   slivers: [
                     SliverToBoxAdapter(child: _header(context, wide)),
                     if (widget.busy)
-                      const SliverToBoxAdapter(
-                        child: LinearProgressIndicator(color: _accent),
+                      SliverToBoxAdapter(
+                        child: LinearProgressIndicator(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                       ),
                     if (widget.notice != null)
                       SliverToBoxAdapter(
@@ -99,7 +116,9 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
                           ),
                           child: Text(
                             widget.notice!,
-                            style: const TextStyle(color: Color(0xFFFFC578)),
+                            style: TextStyle(
+                              color: theme.colorScheme.secondary,
+                            ),
                           ),
                         ),
                       ),
@@ -110,9 +129,9 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(
+                              Icon(
                                 Icons.videogame_asset_outlined,
-                                color: _accent,
+                                color: Theme.of(context).colorScheme.primary,
                                 size: 54,
                               ),
                               const SizedBox(height: 16),
@@ -150,26 +169,28 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
                           SizedBox(
                             width: 224,
                             child: Container(
-                              color: _surface,
+                              color: Theme.of(context).colorScheme.surface,
                               child: SafeArea(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Padding(
-                                      padding: EdgeInsets.all(26),
+                                    Padding(
+                                      padding: const EdgeInsets.all(26),
                                       child: Text(
                                         'MONOLITH',
                                         style: TextStyle(
                                           fontSize: 21,
                                           fontWeight: FontWeight.w900,
                                           letterSpacing: 3,
-                                          color: _accent,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .primary,
                                         ),
                                       ),
                                     ),
-                                    const Divider(color: Colors.white12),
-                                    const Padding(
-                                      padding: EdgeInsets.fromLTRB(
+                                    Divider(color: theme.dividerColor),
+                                    Padding(
+                                      padding: const EdgeInsets.fromLTRB(
                                         24,
                                         18,
                                         0,
@@ -180,7 +201,9 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
                                         style: TextStyle(
                                           fontSize: 11,
                                           letterSpacing: 2,
-                                          color: Colors.white54,
+                                          color:
+                                              tokens?.textMuted ??
+                                              theme.colorScheme.onSurface,
                                         ),
                                       ),
                                     ),
@@ -229,13 +252,13 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (!wide)
-          const Text(
+          Text(
             'MONOLITH',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w900,
               letterSpacing: 3,
-              color: _accent,
+              color: Theme.of(context).colorScheme.primary,
             ),
           ),
         const SizedBox(height: 26),
@@ -267,25 +290,32 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
               ?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.8),
         ),
         const SizedBox(height: 7),
-        const Text(
+        Text(
           'Toutes vos aventures, au même endroit.',
-          style: TextStyle(color: Colors.white60),
+          style: TextStyle(
+            color: Theme.of(context).extension<StyleTokens>()?.textMuted,
+          ),
         ),
         const SizedBox(height: 22),
         TextField(
           onChanged: widget.onSearchChanged,
           decoration: InputDecoration(
             hintText: 'Rechercher un jeu (* et ? acceptés)',
-            prefixIcon: const Icon(Icons.search, color: _accent),
+            prefixIcon: Icon(
+              Icons.search,
+              color: Theme.of(context).colorScheme.primary,
+            ),
             suffixIcon: IconButton(
               tooltip: 'Actualiser',
               onPressed: widget.onRefresh,
               icon: const Icon(Icons.refresh),
             ),
             filled: true,
-            fillColor: _surface,
+            fillColor: Theme.of(context).colorScheme.surface,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(
+                Theme.of(context).extension<StyleTokens>()?.cornerRadius ?? 14,
+              ),
               borderSide: BorderSide.none,
             ),
           ),
@@ -319,7 +349,7 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
           if (widget.update!.message != null)
             Text(
               widget.update!.message!,
-              style: const TextStyle(color: Color(0xFFFFC578)),
+              style: TextStyle(color: Theme.of(context).colorScheme.secondary),
             ),
           const SizedBox(height: 12),
         ],
@@ -340,6 +370,12 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
                 icon: const Icon(Icons.sports_esports),
                 label: const Text('Manettes'),
               ),
+            if (widget.onStyle != null)
+              OutlinedButton.icon(
+                onPressed: widget.onStyle,
+                icon: const Icon(Icons.palette_outlined),
+                label: const Text('Apparence'),
+              ),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -348,7 +384,9 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
                   onPressed: () => setState(() => _list = false),
                   icon: Icon(
                     Icons.grid_view,
-                    color: _list ? Colors.white54 : _accent,
+                    color: _list
+                        ? Theme.of(context).extension<StyleTokens>()?.textMuted
+                        : Theme.of(context).colorScheme.primary,
                   ),
                 ),
                 IconButton(
@@ -356,7 +394,9 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
                   onPressed: () => setState(() => _list = true),
                   icon: Icon(
                     Icons.view_list,
-                    color: _list ? _accent : Colors.white54,
+                    color: _list
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).extension<StyleTokens>()?.textMuted,
                   ),
                 ),
               ],
@@ -378,7 +418,7 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
             children: [
               Icon(
                 _list ? Icons.view_list : Icons.grid_view_rounded,
-                color: _accent,
+                color: Theme.of(context).colorScheme.primary,
                 size: 22,
               ),
               const SizedBox(width: 10),
@@ -391,8 +431,8 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
               ),
               Text(
                 '${section.games.length} JEUX',
-                style: const TextStyle(
-                  color: Colors.white54,
+                style: TextStyle(
+                  color: Theme.of(context).extension<StyleTokens>()?.textMuted,
                   letterSpacing: 1,
                   fontSize: 11,
                 ),
@@ -409,7 +449,7 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
                       Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: ListTile(
-                          tileColor: _surface,
+                          tileColor: Theme.of(context).colorScheme.surface,
                           title: Text(game.title),
                           subtitle: Text(
                             game.description,
@@ -428,7 +468,12 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
                 )
               : LayoutBuilder(
                   builder: (context, constraints) {
-                    final columns = ((constraints.maxWidth + 14) / 210)
+                    final gap =
+                        Theme.of(context)
+                            .extension<StyleTokens>()
+                            ?.tileSpacing ??
+                        14;
+                    final columns = ((constraints.maxWidth + gap) / (196 + gap))
                         .floor()
                         .clamp(1, 12);
                     return GridView.builder(
@@ -436,8 +481,8 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
                       physics: const NeverScrollableScrollPhysics(),
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: columns,
-                        mainAxisSpacing: 14,
-                        crossAxisSpacing: 14,
+                        mainAxisSpacing: gap,
+                        crossAxisSpacing: gap,
                         mainAxisExtent: 410,
                       ),
                       itemCount: section.games.length,
@@ -492,10 +537,10 @@ class _GameCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cover = game.coverUri;
-    Widget image = const Center(
+    Widget image = Center(
       child: Icon(
         Icons.videogame_asset_outlined,
-        color: Colors.white38,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
         size: 58,
       ),
     );
@@ -504,10 +549,10 @@ class _GameCard extends StatelessWidget {
         image = Image.network(
           cover,
           fit: BoxFit.contain,
-          errorBuilder: (_, _, _) => const Center(
+          errorBuilder: (_, _, _) => Center(
             child: Icon(
               Icons.image_not_supported_outlined,
-              color: Colors.white38,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
         );
@@ -515,10 +560,10 @@ class _GameCard extends StatelessWidget {
         image = Image.file(
           File.fromUri(Uri.parse(cover)),
           fit: BoxFit.contain,
-          errorBuilder: (_, _, _) => const Center(
+          errorBuilder: (_, _, _) => Center(
             child: Icon(
               Icons.image_not_supported_outlined,
-              color: Colors.white38,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
         );
@@ -526,15 +571,24 @@ class _GameCard extends StatelessWidget {
     }
     return Container(
       decoration: BoxDecoration(
-        color: _surface,
-        border: Border.all(color: Colors.white10),
+        color: Theme.of(context).colorScheme.surface,
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
+        borderRadius: BorderRadius.circular(
+          Theme.of(context).extension<StyleTokens>()?.cornerRadius ?? 0,
+        ),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SizedBox(
             height: 290,
-            child: ColoredBox(color: const Color(0xFF202A3C), child: image),
+            child: ColoredBox(
+              color:
+                  Theme.of(context).extension<StyleTokens>()?.surfaceRaised ??
+                  Theme.of(context).colorScheme.surface,
+              child: image,
+            ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(13, 11, 13, 0),

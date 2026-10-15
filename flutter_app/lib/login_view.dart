@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+
+import 'style_theme.dart';
 
 typedef LocalLogin = Future<void> Function(String username, String password);
 
@@ -9,6 +13,7 @@ class MonolithLoginView extends StatefulWidget {
     required this.onSaveBackendUrl,
     required this.onLogin,
     required this.onOffline,
+    this.onStyle,
     this.busy = false,
     this.notice,
   });
@@ -17,6 +22,7 @@ class MonolithLoginView extends StatefulWidget {
   final Future<void> Function(String) onSaveBackendUrl;
   final LocalLogin onLogin;
   final VoidCallback onOffline;
+  final VoidCallback? onStyle;
   final bool busy;
   final String? notice;
 
@@ -58,79 +64,105 @@ class _MonolithLoginViewState extends State<MonolithLoginView> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: SafeArea(
-      child: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'MONOLITH',
-                  style: Theme.of(context).textTheme.headlineLarge,
+    body: Stack(
+      children: [
+        if (Theme.of(context).extension<StyleTokens>()?.backgroundImage
+            case final path?)
+          Positioned.fill(
+            child: Opacity(
+              opacity: 0.23,
+              child: Image.file(
+                File(path),
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              ),
+            ),
+          ),
+        SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'MONOLITH',
+                      style: Theme.of(context).textTheme.headlineLarge,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Connexion au catalogue · accès hors ligne disponible',
+                    ),
+                    if (widget.busy) const LinearProgressIndicator(),
+                    if (widget.notice != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        widget.notice!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.secondary,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                    TextField(
+                      key: const Key('backend-url'),
+                      controller: _backend,
+                      decoration: const InputDecoration(
+                        labelText: 'URL du serveur',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: widget.busy
+                          ? null
+                          : () => widget.onSaveBackendUrl(_backend.text),
+                      child: const Text('Enregistrer le serveur'),
+                    ),
+                    const SizedBox(height: 24),
+                    TextField(
+                      key: const Key('username'),
+                      controller: _username,
+                      decoration: const InputDecoration(
+                        labelText: 'Nom d’utilisateur',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      key: const Key('password'),
+                      controller: _password,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Mot de passe',
+                      ),
+                      onSubmitted: (_) {
+                        if (!widget.busy) _login();
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: widget.busy ? null : _login,
+                      child: const Text('Connexion locale'),
+                    ),
+                    TextButton(
+                      onPressed: widget.busy ? null : widget.onOffline,
+                      child: const Text('Continuer hors ligne'),
+                    ),
+                    if (widget.onStyle != null)
+                      OutlinedButton.icon(
+                        onPressed: widget.onStyle,
+                        icon: const Icon(Icons.palette_outlined),
+                        label: const Text('Apparence'),
+                      ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Connexion au catalogue · accès hors ligne disponible',
-                ),
-                if (widget.busy) const LinearProgressIndicator(),
-                if (widget.notice != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    widget.notice!,
-                    style: const TextStyle(color: Colors.orangeAccent),
-                  ),
-                ],
-                const SizedBox(height: 24),
-                TextField(
-                  key: const Key('backend-url'),
-                  controller: _backend,
-                  decoration: const InputDecoration(
-                    labelText: 'URL du serveur',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton(
-                  onPressed: widget.busy
-                      ? null
-                      : () => widget.onSaveBackendUrl(_backend.text),
-                  child: const Text('Enregistrer le serveur'),
-                ),
-                const SizedBox(height: 24),
-                TextField(
-                  key: const Key('username'),
-                  controller: _username,
-                  decoration: const InputDecoration(
-                    labelText: 'Nom d’utilisateur',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  key: const Key('password'),
-                  controller: _password,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Mot de passe'),
-                  onSubmitted: (_) {
-                    if (!widget.busy) _login();
-                  },
-                ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: widget.busy ? null : _login,
-                  child: const Text('Connexion locale'),
-                ),
-                TextButton(
-                  onPressed: widget.busy ? null : widget.onOffline,
-                  child: const Text('Continuer hors ligne'),
-                ),
-              ],
+              ),
             ),
           ),
         ),
-      ),
+      ],
     ),
   );
 }

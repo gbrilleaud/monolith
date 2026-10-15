@@ -9,6 +9,14 @@
       "flutter_test": {"path": "flutter_app/test/widget_test.dart", "symbol": "testWidgets("}
     },
     {
+      "id": "style_settings",
+      "core": {"path": "src/style_config.rs", "symbol": "pub fn save_custom_json("},
+      "egui": {"path": "src/ui.rs", "symbol": "fn render_style_settings("},
+      "flutter": {"path": "flutter_app/lib/style_settings.dart", "symbol": "class StyleSettings"},
+      "rust_test": {"path": "tests/style_config.rs", "symbol": "fn custom_style_is_selected_persisted_and_appended_once("},
+      "flutter_test": {"path": "flutter_app/test/style_settings_test.dart", "symbol": "testWidgets("}
+    },
+    {
       "id": "controller_settings",
       "core": {"path": "src/controller_profiles.rs", "symbol": "pub fn reset("},
       "egui": {"path": "src/ui.rs", "symbol": "fn render_controller_settings("},

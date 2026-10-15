@@ -57,6 +57,10 @@ pub struct MonolithApp {
     client_config_path: PathBuf,
     show_connection_settings: bool,
     show_controller_settings: bool,
+    show_style_settings: bool,
+    style_snapshot: Option<crate::style_config::StyleSnapshot>,
+    style_json_draft: String,
+    style_refresh: Option<Receiver<anyhow::Result<crate::style_config::StyleSnapshot>>>,
     controller_draft: String,
     controller_system_id: i64,
     backend_url_draft: String,
@@ -117,11 +121,207 @@ impl MonolithApp {
             client_config_path,
             show_connection_settings: false,
             show_controller_settings: false,
+            show_style_settings: false,
+            style_snapshot: crate::style_config::StyleStore::load(&update_data_dir).ok(),
+            style_json_draft: String::new(),
+            style_refresh: None,
             controller_draft: String::new(),
             controller_system_id: 11,
             backend_url_draft,
             retroarch_installer: RetroArchInstaller::new(),
             client_update: crate::client_update::ClientUpdate::new(update_data_dir),
+        }
+    }
+
+    fn open_style_settings(&mut self) {
+        match crate::style_config::StyleStore::load(&self.style_root()) {
+            Ok(snapshot) => {
+                let mut custom = snapshot
+                    .custom
+                    .clone()
+                    .unwrap_or_else(|| snapshot.resolved.clone());
+                custom.id = "custom".into();
+                if snapshot.custom.is_none() {
+                    custom.name = "Personnalisé".into();
+                }
+                self.style_json_draft = serde_json::to_string_pretty(&custom).unwrap_or_default();
+                self.style_snapshot = Some(snapshot);
+            }
+            Err(error) => self.notice = Some(format!("Configuration du thème illisible : {error}")),
+        }
+        self.show_style_settings = true;
+    }
+
+    fn paint_style_background(&self, ui: &egui::Ui) {
+        let Some(image) = self
+            .style_snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.resolved.background_image.as_deref())
+        else {
+            return;
+        };
+        let path = self.style_root().join("themes/backgrounds").join(image);
+        if !path.is_file() {
+            return;
+        }
+        if let Ok(Some(uri)) = crate::cover::cover_uri(&path.to_string_lossy()) {
+            egui::Image::new(uri)
+                .fit_to_exact_size(ui.max_rect().size())
+                .tint(egui::Color32::from_white_alpha(70))
+                .paint_at(ui, ui.max_rect());
+        }
+    }
+
+    fn style_root(&self) -> PathBuf {
+        self.client_config_path
+            .parent()
+            .unwrap_or(std::path::Path::new("data"))
+            .to_path_buf()
+    }
+
+    fn apply_style(
+        &mut self,
+        context: &egui::Context,
+        snapshot: crate::style_config::StyleSnapshot,
+    ) {
+        crate::theme::install_style(context, &snapshot.resolved);
+        self.style_snapshot = Some(snapshot);
+        context.request_repaint();
+    }
+
+    fn render_style_settings(&mut self, context: &egui::Context) {
+        if !self.show_style_settings {
+            return;
+        }
+        let root = self.style_root();
+        let mut open = self.show_style_settings;
+        let mut selection = None;
+        let mut animation = None;
+        let mut save_custom = false;
+        let mut reset = false;
+        let mut refresh = false;
+        egui::Window::new("Apparence de Monolith")
+            .open(&mut open)
+            .resizable(true)
+            .default_width(540.0)
+            .show(context, |ui| {
+                ui.label("Thèmes prédéfinis par le serveur ; cache utilisable hors ligne.");
+                if let Some(snapshot) = &self.style_snapshot {
+                    egui::ScrollArea::vertical()
+                        .max_height(190.0)
+                        .show(ui, |ui| {
+                            for preset in &snapshot.catalog.presets {
+                                if ui
+                                    .selectable_label(snapshot.selected == preset.id, &preset.name)
+                                    .clicked()
+                                {
+                                    selection = Some(preset.id.clone());
+                                }
+                            }
+                        });
+                    let mut enabled = snapshot.cartridge_animation;
+                    if ui
+                        .checkbox(
+                            &mut enabled,
+                            "Animation d’insertion Mega Drive (Flutter uniquement)",
+                        )
+                        .changed()
+                    {
+                        animation = Some(enabled);
+                    }
+                } else {
+                    ui.label("Configuration locale invalide : réinitialisation disponible.");
+                    if ui.button("Réinitialiser l’apparence locale").clicked() {
+                        reset = true;
+                    }
+                }
+                if ui
+                    .add_enabled(
+                        self.style_refresh.is_none(),
+                        egui::Button::new("Actualiser depuis le serveur"),
+                    )
+                    .clicked()
+                {
+                    refresh = true;
+                }
+                if self.style_refresh.is_some() {
+                    ui.spinner();
+                }
+                ui.separator();
+                ui.label("Thème personnalisé (JSON local, couleurs #RRGGBB ; fichier style.json)");
+                ui.add(
+                    egui::TextEdit::multiline(&mut self.style_json_draft)
+                        .desired_width(520.0)
+                        .desired_rows(15),
+                );
+                if ui.button("Enregistrer comme thème personnalisé").clicked() {
+                    save_custom = true;
+                }
+            });
+        self.show_style_settings = open;
+        if reset {
+            match crate::style_config::StyleStore::reset(&root) {
+                Ok(snapshot) => self.apply_style(context, snapshot),
+                Err(error) => self.notice = Some(format!("Réinitialisation refusée : {error}")),
+            }
+        }
+        if let Some(id) = selection {
+            match crate::style_config::StyleStore::select(&root, &id) {
+                Ok(snapshot) => self.apply_style(context, snapshot),
+                Err(error) => self.notice = Some(format!("Thème refusé : {error}")),
+            }
+        }
+        if let Some(enabled) = animation {
+            match crate::style_config::StyleStore::set_animation(&root, enabled) {
+                Ok(snapshot) => self.apply_style(context, snapshot),
+                Err(error) => self.notice = Some(format!("Option refusée : {error}")),
+            }
+        }
+        if save_custom {
+            match crate::style_config::StyleStore::save_custom_json(&root, &self.style_json_draft) {
+                Ok(snapshot) => self.apply_style(context, snapshot),
+                Err(error) => self.notice = Some(format!("JSON de thème refusé : {error}")),
+            }
+        }
+        if refresh {
+            let (sender, receiver) = std::sync::mpsc::channel();
+            let url = self.auth.backend_url().to_string();
+            std::thread::spawn(move || {
+                let _ = sender.send(crate::style_config::StyleStore::refresh(&root, &url));
+            });
+            self.style_refresh = Some(receiver);
+        }
+    }
+
+    fn poll_style_refresh(&mut self, context: &egui::Context) {
+        use std::sync::mpsc::TryRecvError;
+        let result = self
+            .style_refresh
+            .as_ref()
+            .map(|receiver| receiver.try_recv());
+        match result {
+            Some(Ok(result)) => {
+                self.style_refresh = None;
+                match result {
+                    Ok(snapshot) => {
+                        self.apply_style(context, snapshot);
+                        self.notice = Some("Thèmes actualisés depuis le serveur".into());
+                    }
+                    Err(error) => {
+                        self.notice = Some(format!(
+                            "Serveur indisponible, thèmes locaux préservés : {error}"
+                        ));
+                    }
+                }
+            }
+            Some(Err(TryRecvError::Disconnected)) => {
+                self.style_refresh = None;
+                self.notice = Some("Actualisation des thèmes interrompue".into());
+            }
+            Some(Err(TryRecvError::Empty)) | None => {}
+        }
+        if self.style_refresh.is_some() {
+            context.request_repaint_after(std::time::Duration::from_millis(100));
         }
     }
 
@@ -788,8 +988,10 @@ impl eframe::App for MonolithApp {
             });
         }
         self.auth.poll();
+        self.poll_style_refresh(context);
         self.render_connection_settings(context);
         self.render_controller_settings(context);
+        self.render_style_settings(context);
         self.import_remote_cache_for_active_user();
         if let Some(result) = self.auth.poll_override_sync() {
             if result.is_ok() {
@@ -828,9 +1030,15 @@ impl eframe::App for MonolithApp {
                 ui.horizontal(|ui| {
                     ui.label("MONOLITH");
                     self.render_update_control(ui);
+                    if ui.button("Apparence").clicked() {
+                        self.open_style_settings();
+                    }
                 });
             });
-            egui::CentralPanel::default().show(context, |ui| self.render_login(ui));
+            egui::CentralPanel::default().show(context, |ui| {
+                self.paint_style_background(ui);
+                self.render_login(ui);
+            });
             return;
         }
 
@@ -848,6 +1056,9 @@ impl eframe::App for MonolithApp {
                 if ui.button("Paramètres serveur").clicked() {
                     self.backend_url_draft = self.auth.backend_url().into();
                     self.show_connection_settings = true;
+                }
+                if ui.button("Apparence").clicked() {
+                    self.open_style_settings();
                 }
                 if ui.button("Manettes").clicked() {
                     let root = self
@@ -932,11 +1143,14 @@ impl eframe::App for MonolithApp {
         self.render_association_backoffice(context);
 
         let current = self.nav.current().clone();
-        egui::CentralPanel::default().show(context, |ui| match current {
-            AppView::Home => self.render_home(ui),
-            AppView::Systems => self.render_systems(ui),
-            AppView::Catalog { system_id } => self.render_catalog(ui, system_id),
-            AppView::Details { game_id } => self.render_details(ui, game_id),
+        egui::CentralPanel::default().show(context, |ui| {
+            self.paint_style_background(ui);
+            match current {
+                AppView::Home => self.render_home(ui),
+                AppView::Systems => self.render_systems(ui),
+                AppView::Catalog { system_id } => self.render_catalog(ui, system_id),
+                AppView::Details { game_id } => self.render_details(ui, game_id),
+            }
         });
     }
 }
@@ -1125,7 +1339,7 @@ impl MonolithApp {
                 );
                 let rows = filter_and_sort_catalog_rows(&rows, &self.search, self.catalog_sort);
                 let heading = format!("{}  ·  {} ROM(s)", system.name, rows.len());
-                crate::theme::card_frame().show(ui, |ui| {
+                crate::theme::card_frame(ui).show(ui, |ui| {
                     egui::CollapsingHeader::new(heading)
                         .id_source(("library-system", system.system_id))
                         .default_open(true)
@@ -1210,7 +1424,7 @@ impl MonolithApp {
                     egui::vec2(TILE_WIDTH, TILE_HEIGHT),
                     egui::Layout::top_down(egui::Align::Center),
                     |ui| {
-                        crate::theme::card_frame().show(ui, |ui| {
+                        crate::theme::card_frame(ui).show(ui, |ui| {
                             ui.set_min_size(egui::vec2(TILE_WIDTH - 16.0, TILE_HEIGHT - 16.0));
                             if let Some(response) =
                                 render_cover(ui, row.cover_art.as_deref(), COVER_SIZE)

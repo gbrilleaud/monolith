@@ -11,6 +11,45 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These functions are ignored because they are not marked as `pub`: `active_session`, `flutter_updater`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
 
+Future<String> resetStyle({required String dataDirectory}) => RustLib
+    .instance
+    .api
+    .crateFlutterApiResetStyle(dataDirectory: dataDirectory);
+
+Future<String> styleSnapshotJson({required String dataDirectory}) => RustLib
+    .instance
+    .api
+    .crateFlutterApiStyleSnapshotJson(dataDirectory: dataDirectory);
+
+Future<String> selectStyle({
+  required String dataDirectory,
+  required String id,
+}) => RustLib.instance.api.crateFlutterApiSelectStyle(
+  dataDirectory: dataDirectory,
+  id: id,
+);
+
+Future<String> setCartridgeAnimation({
+  required String dataDirectory,
+  required bool enabled,
+}) => RustLib.instance.api.crateFlutterApiSetCartridgeAnimation(
+  dataDirectory: dataDirectory,
+  enabled: enabled,
+);
+
+Future<String> saveCustomStyle({
+  required String dataDirectory,
+  required String json,
+}) => RustLib.instance.api.crateFlutterApiSaveCustomStyle(
+  dataDirectory: dataDirectory,
+  json: json,
+);
+
+Future<String> refreshStyles({required String dataDirectory}) => RustLib
+    .instance
+    .api
+    .crateFlutterApiRefreshStyles(dataDirectory: dataDirectory);
+
 Future<String> controllerConfigText({required String dataDirectory}) => RustLib
     .instance
     .api
