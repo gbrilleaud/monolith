@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'src/rust/flutter_api.dart';
 import 'src/rust/library_service.dart';
 import 'megadrive_launch_scene.dart';
+import 'system_launch_scene.dart';
 import 'style_theme.dart';
 
 /// Présentation pure : les jeux, filtres et autorisations viennent de Rust.
@@ -53,25 +54,27 @@ class MonolithLibraryView extends StatefulWidget {
 class _MonolithLibraryViewState extends State<MonolithLibraryView> {
   bool _list = false;
   LibraryGame? _launchingGame;
+  String? _launchingSystemName;
 
   void _launchGame(LibraryGame game, String systemName) {
     if (widget.busy || _launchingGame != null) return;
-    final normalized = systemName.toLowerCase().replaceAll(
-      RegExp(r'[\s_-]'),
-      '',
-    );
-    if (widget.cartridgeAnimation &&
-        (normalized.contains('megadrive') || normalized.contains('genesis'))) {
-      setState(() => _launchingGame = game);
+    if (widget.cartridgeAnimation) {
+      setState(() {
+        _launchingGame = game;
+        _launchingSystemName = systemName;
+      });
     } else {
       widget.onLaunch(game.path);
     }
   }
 
-  void _completeMegaDriveLaunch() {
+  void _completeLaunch() {
     final game = _launchingGame;
     if (game == null || !mounted) return;
-    setState(() => _launchingGame = null);
+    setState(() {
+      _launchingGame = null;
+      _launchingSystemName = null;
+    });
     widget.onLaunch(game.path);
   }
 
@@ -235,11 +238,20 @@ class _MonolithLibraryViewState extends State<MonolithLibraryView> {
           ),
           if (_launchingGame case final game?)
             Positioned.fill(
-              child: MegaDriveLaunchScene(
-                title: game.title,
-                coverUri: game.coverUri,
-                onFinished: _completeMegaDriveLaunch,
-              ),
+              child:
+                  LaunchIdentity.forSystem(_launchingSystemName ?? '')
+                      .isMegaDrive
+                  ? MegaDriveLaunchScene(
+                      title: game.title,
+                      coverUri: game.coverUri,
+                      onFinished: _completeLaunch,
+                    )
+                  : SystemLaunchScene(
+                      systemName: _launchingSystemName ?? '',
+                      title: game.title,
+                      coverUri: game.coverUri,
+                      onFinished: _completeLaunch,
+                    ),
             ),
         ],
       ),

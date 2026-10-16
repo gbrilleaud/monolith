@@ -74,6 +74,7 @@ void main() {
         ),
       ),
     );
+    expect(find.text('Animations au lancement des jeux'), findsOneWidget);
     await tester.tap(find.text('Clair'));
     await tester.pump();
     expect(selections, ['light']);

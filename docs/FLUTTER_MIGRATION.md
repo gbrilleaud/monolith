@@ -108,19 +108,25 @@ revendiquer une synchronisation générale des émulateurs. Les lancements réel
 avec des manettes restent à valider sur Windows et Linux ; mobile non pris en
 charge.
 
-## Animation de lancement Mega Drive (Flutter uniquement)
+## Animations de lancement par système (Flutter uniquement)
 
-Dans la bibliothèque Flutter (grille et liste), cliquer sur « Lancer » pour une
-console nommée Mega Drive/Genesis affiche pendant 2,2 secondes une console et
-une cartouche vectorielles en perspective. L'étiquette utilise `coverUri` du jeu
-(`file://` ou HTTP(S), avec pictogramme de repli). Le lancement réel est ensuite
-transmis au même service Rust qu'avant ; aucune nouvelle règle d'émulation
-n'est implémentée en Dart. Une vue détruite avant la fin annule le lancement.
-C'est une présentation spécifique à Flutter demandée pour Mega Drive, **pas une
-fonctionnalité métier commune** soumise à la gate egui/Flutter. Les autres
-consoles et egui conservent leur lancement existant. Le rendu 3D est stylisé en
-perspective, sans moteur 3D ni modèle matériel exact ; l'aspect natif et le
-calage sur un véritable émulateur restent à vérifier sur poste client.
+Dans la bibliothèque Flutter (grille et liste), « Lancer » affiche une scène de
+2,2 secondes avant de transmettre la ROM au service Rust inchangé. Mega Drive /
+Genesis conserve son animation dédiée de cartouche en perspective. Les autres
+systèmes ont une scène vectorielle adaptative : identité et couleur propres au
+système, silhouette de console à cartouche ou à disque, portable, borne arcade
+ou ordinateur, avec la jaquette (`file://` ou HTTP(S)) et un pictogramme de repli.
+Les noms prévus couvrent les dossiers ROM du NAS (Lynx, FinalBurn Alpha, MAME,
+NES, Super Nintendo, Nintendo 64, Game Boy / Color / Advance, GameCube,
+Dreamcast, Game Gear, Master System, Saturn, PlayStation, PSP) ainsi que PS2
+et PC. Un système inconnu reçoit une scène générique portant son nom. Le
+réglage « Animations au lancement des jeux » coupe toutes les scènes et lance
+immédiatement. Une vue détruite avant la fin annule le lancement différé.
+
+C'est une **présentation Flutter**, non une nouvelle règle métier Rust ni une
+parité visuelle egui. Les silhouettes sont stylisées et ne reproduisent pas
+fidèlement le matériel ; rendu natif et timing de l'émulateur restent à vérifier
+sur poste client.
 
 ## Limites avant remplacement d'egui
 

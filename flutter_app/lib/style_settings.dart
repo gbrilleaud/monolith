@@ -123,8 +123,10 @@ class _StyleSettingsState extends State<StyleSettings> {
               label: const Text('Actualiser les thèmes du serveur'),
             ),
             SwitchListTile(
-              title: const Text('Animation d’insertion de cartouche'),
-              subtitle: const Text('Mega Drive, version Flutter uniquement'),
+              title: const Text('Animations au lancement des jeux'),
+              subtitle: const Text(
+                'Toutes les consoles et le PC, version Flutter uniquement',
+              ),
               value: _style.cartridgeAnimation,
               onChanged: _busy
                   ? null

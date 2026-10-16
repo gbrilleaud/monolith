@@ -121,6 +121,10 @@ void main() {
     expect(find.text('Rayman 2'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.tap(find.text('Lancer'));
+    await tester.pump();
+    expect(selections, isEmpty);
+    await tester.pump(const Duration(milliseconds: 2300));
+    await tester.pump();
     expect(selections, ['/roms/rayman.gdi']);
   });
 
@@ -310,6 +314,122 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('Dreamcast : scène différée, jaquette et lancement unique', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final launches = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MonolithLibraryView(
+          sections: const [
+            LibrarySection(
+              systemId: 7,
+              name: 'Sega Dreamcast',
+              games: [
+                LibraryGame(
+                  systemId: 7,
+                  title: 'Rayman 2',
+                  path: '/roms/rayman.gdi',
+                  coverUri: 'https://example.invalid/rayman.png',
+                  available: true,
+                  description: '',
+                ),
+              ],
+            ),
+          ],
+          onLaunch: launches.add,
+        ),
+      ),
+    );
+    await tester.tap(find.text('Lancer'));
+    await tester.pump();
+    expect(find.byKey(const Key('system-launch-scene')), findsOneWidget);
+    expect(launches, isEmpty);
+    await tester.pump(const Duration(milliseconds: 1100));
+    expect(launches, isEmpty);
+    await tester.pump(const Duration(milliseconds: 1200));
+    await tester.pump();
+    expect(launches, ['/roms/rayman.gdi']);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('scène annulée lors de la disparition de la bibliothèque', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final launches = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MonolithLibraryView(
+          sections: const [
+            LibrarySection(
+              systemId: 19,
+              name: 'PSP',
+              games: [
+                LibraryGame(
+                  systemId: 19,
+                  title: 'Jeu PSP',
+                  path: '/roms/game.iso',
+                  available: true,
+                  description: '',
+                ),
+              ],
+            ),
+          ],
+          onLaunch: launches.add,
+        ),
+      ),
+    );
+    await tester.tap(find.text('Lancer'));
+    await tester.pump();
+    expect(find.byKey(const Key('system-launch-scene')), findsOneWidget);
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    await tester.pump(const Duration(seconds: 3));
+    expect(launches, isEmpty);
+  });
+
+  testWidgets('PC : animation désactivée lance immédiatement', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final launches = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MonolithLibraryView(
+          sections: const [
+            LibrarySection(
+              systemId: 90,
+              name: 'PC',
+              games: [
+                LibraryGame(
+                  systemId: 90,
+                  title: 'Jeu PC',
+                  path: '/games/game.exe',
+                  available: true,
+                  description: '',
+                ),
+              ],
+            ),
+          ],
+          onLaunch: launches.add,
+          cartridgeAnimation: false,
+        ),
+      ),
+    );
+    await tester.tap(find.text('Lancer'));
+    await tester.pump();
+    expect(launches, ['/games/game.exe']);
+    expect(find.byKey(const Key('system-launch-scene')), findsNothing);
+  });
 
   testWidgets('Mega Drive : animation désactivée lance immédiatement', (
     tester,
