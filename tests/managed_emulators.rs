@@ -176,9 +176,15 @@ fn genesis_launch_requires_managed_retroarch_core_without_toml() {
             "-L",
             engine.join("cores").join(core).to_str().unwrap(),
             "--config",
-            data.join("retroarch/retroarch.cfg").to_str().unwrap(),
+            data.join("retroarch")
+                .join("retroarch.cfg")
+                .to_str()
+                .unwrap(),
             "--appendconfig",
-            data.join("retroarch/monolith_paths.cfg").to_str().unwrap(),
+            data.join("retroarch")
+                .join("monolith_paths.cfg")
+                .to_str()
+                .unwrap(),
             rom.to_str().unwrap()
         ]
     );
