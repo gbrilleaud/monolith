@@ -6,7 +6,7 @@ use crate::{
     cover::cover_uri,
     db::Database,
     emulator_launcher::{EmulatorLauncher, LaunchCommand},
-    local_rom::{command_for_local_rom, launch_local_rom},
+    local_rom::validate_local_rom,
     models::{GameMetadata, RomAvailability, RomLocation},
 };
 use anyhow::{Context, Result};
@@ -114,10 +114,19 @@ impl LibraryService {
             .find(|row| row.path == path && row.availability == RomAvailability::Available)
             .context("ROM indisponible dans la bibliothèque locale")?;
         if location.game_id.is_none() {
-            command_for_local_rom(launcher, &location)
-        } else {
-            launcher.command_for(location.system_id, Path::new(&location.path))
+            validate_local_rom(&location)?;
         }
+        let system_name = self
+            .db
+            .systems()?
+            .into_iter()
+            .find(|s| s.system_id == location.system_id)
+            .map(|s| s.name);
+        launcher.command_for_named(
+            location.system_id,
+            system_name.as_deref(),
+            Path::new(&location.path),
+        )
     }
 
     pub fn launch_rom(&self, launcher: &EmulatorLauncher, path: &str) -> Result<()> {
@@ -130,10 +139,19 @@ impl LibraryService {
         #[cfg(any(target_os = "windows", target_os = "linux"))]
         {
             if location.game_id.is_none() {
-                launch_local_rom(launcher, &location)?;
-            } else {
-                launcher.launch(location.system_id, Path::new(&location.path))?;
+                validate_local_rom(&location)?;
             }
+            let system_name = self
+                .db
+                .systems()?
+                .into_iter()
+                .find(|s| s.system_id == location.system_id)
+                .map(|s| s.name);
+            launcher.launch_named(
+                location.system_id,
+                system_name.as_deref(),
+                Path::new(&location.path),
+            )?;
             Ok(())
         }
         #[cfg(not(any(target_os = "windows", target_os = "linux")))]

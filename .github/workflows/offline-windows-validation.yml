@@ -1,0 +1,104 @@
+# Manual Windows evaluation artifacts only. Do not upload these to a public Release
+# before the corresponding-source, dependency-notice and redistribution audit.
+name: Offline Windows evaluation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.7'
+          cache: true
+      - name: Test offline assembly and shared launcher
+        shell: pwsh
+        run: |
+          python -m unittest discover -s tests -p 'test_engine_bundle_builder.py' -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tests -p 'test_assemble_offline_windows.py' -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --locked --test managed_emulators
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        env:
+          CARGO_BUILD_JOBS: '1'
+          MONOLITH_SEVENZIP: 'C:\Program Files\7-Zip\7z.exe'
+      - name: Download pinned official archives
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force archives | Out-Null
+          $lock = Get-Content config/engine-lock.json -Raw | ConvertFrom-Json
+          foreach ($part in $lock.components) {
+            if ($part.archive -notmatch '^[A-Za-z0-9._-]+$') { throw "Unsafe archive name" }
+            $file = Join-Path archives $part.archive
+            Invoke-WebRequest -Uri $part.source_url -OutFile $file
+            if ((Get-Item $file).Length -ne $part.archive_bytes) { throw "Size mismatch: $($part.id)" }
+            $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($hash -ne $part.sha256) { throw "SHA-256 mismatch: $($part.id)" }
+          }
+      - name: Build verified engine payload
+        shell: pwsh
+        run: |
+          $sevenzip = 'C:\Program Files\7-Zip\7z.exe'
+          if (-not (Test-Path $sevenzip)) { throw '7-Zip missing on Windows runner' }
+          python scripts/build_engine_bundle.py --lock config/engine-lock.json --archive-dir archives --output dist/engine-payload.zip --sevenzip $sevenzip
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build egui desktop
+        shell: pwsh
+        env:
+          CARGO_BUILD_JOBS: '1'
+        run: |
+          cargo build --locked --release --bin monolith
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force dist/monolith-windows-x86_64 | Out-Null
+          Copy-Item target/release/monolith.exe dist/monolith-windows-x86_64/
+          Compress-Archive -Path dist/monolith-windows-x86_64 -DestinationPath dist/egui-client.zip
+          python scripts/assemble_offline_windows.py --client dist/egui-client.zip --engines dist/engine-payload.zip --root monolith-windows-x86_64 --output dist/monolith-windows-x86_64-offline-evaluation.zip
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build Flutter desktop
+        working-directory: flutter_app
+        shell: pwsh
+        run: |
+          flutter pub get
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          flutter build windows --release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Assemble Flutter offline evaluation
+        shell: pwsh
+        env:
+          CARGO_BUILD_JOBS: '1'
+        run: |
+          cargo build --locked --release --bin monolith-flutter-updater
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force dist/monolith-flutter-windows-x86_64 | Out-Null
+          Copy-Item flutter_app/build/windows/x64/runner/Release/* dist/monolith-flutter-windows-x86_64/ -Recurse
+          Copy-Item target/release/monolith-flutter-updater.exe dist/monolith-flutter-windows-x86_64/
+          Compress-Archive -Path dist/monolith-flutter-windows-x86_64 -DestinationPath dist/flutter-client.zip
+          python scripts/assemble_offline_windows.py --client dist/flutter-client.zip --engines dist/engine-payload.zip --root monolith-flutter-windows-x86_64 --output dist/monolith-flutter-windows-x86_64-offline-evaluation.zip
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify evaluation packages
+        shell: pwsh
+        run: |
+          foreach ($name in @('monolith-windows-x86_64-offline-evaluation', 'monolith-flutter-windows-x86_64-offline-evaluation')) {
+            $path = "dist/$name.zip"
+            python -m zipfile -t $path
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $hash = (Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $name.zip" | Set-Content "dist/$name.zip.sha256" -NoNewline
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-offline-evaluation
+          path: |
+            dist/*-offline-evaluation.zip
+            dist/*-offline-evaluation.zip.sha256
+          retention-days: 7
+          if-no-files-found: error

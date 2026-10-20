@@ -654,7 +654,11 @@ impl MonolithApp {
             .as_deref()
             .ok_or_else(|| "ROM locale introuvable".to_owned())?;
         self.emulator_launcher
-            .launch(game.system_id, std::path::Path::new(path))
+            .launch_named(
+                game.system_id,
+                Some(&game.system_name),
+                std::path::Path::new(path),
+            )
             .map(|_| ())
             .map_err(|error| error.to_string())
     }
@@ -1077,13 +1081,13 @@ impl eframe::App for MonolithApp {
                         }
                     }
                 }
-                if ui.button("Installer RetroArch").clicked() {
+                if ui.button("Setup hérité RetroArch").clicked() {
                     self.install_retroarch();
                 }
-                if ui.button("Installer PCSX2 2.8.0").clicked() {
+                if ui.button("Setup hérité PCSX2 2.8.0").clicked() {
                     self.install_pcsx2();
                 }
-                if ui.button("Installer Xenia Canary").clicked() {
+                if ui.button("Setup hérité Xenia Canary").clicked() {
                     self.install_xenia();
                 }
                 if matches!(

@@ -12,8 +12,8 @@ Le logiciel peut contrôler le nom, la taille et l'empreinte des fichiers. Les f
 
 | Plateforme | Émulateur/cœur prévu | Fichiers propriétaires | État |
 |---|---|---|---|
-| Mega Drive / Genesis | RetroArch + Genesis Plus GX | aucun pour les cartouches ordinaires | prêt sans BIOS externe |
-| Master System / Game Gear | RetroArch + Genesis Plus GX | aucun pour l'usage courant | prêt sans BIOS externe |
+| Mega Drive / Genesis | RetroArch + Genesis Plus GX | aucun pour les cartouches ordinaires | BIOS non requis ; moteur et cœur à vérifier séparément avant « prêt à jouer » |
+| Master System / Game Gear | RetroArch + Genesis Plus GX | aucun pour l'usage courant | BIOS non requis ; association et moteur non validés |
 | PlayStation | DuckStation, repli SwanStation | BIOS `SCPH-xxxx` régional | requis avant déclaration de compatibilité |
 | Saturn | RetroArch + Mednafen Saturn | BIOS Saturn régional | requis avant déclaration de compatibilité |
 | Mega-CD / Sega CD, si ajouté | Genesis Plus GX | BIOS régionaux `bios_CD_J.bin`, `bios_CD_U.bin`, `bios_CD_E.bin` | hors périmètre actuel |

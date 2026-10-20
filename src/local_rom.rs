@@ -21,7 +21,7 @@ pub fn launch_local_rom(
     launcher.launch(location.system_id, Path::new(&location.path))
 }
 
-fn validate_local_rom(location: &RomLocation) -> Result<()> {
+pub(crate) fn validate_local_rom(location: &RomLocation) -> Result<()> {
     if location.game_id.is_some() {
         bail!("la ROM locale doit être non associée");
     }

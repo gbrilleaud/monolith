@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "distribution": "windows-x86_64 / non-commercial only",
+  "components": [
+    {
+      "id": "retroarch", "version": "1.20.0", "platform": "windows-x86_64",
+      "archive": "RetroArch-1.20.0-Windows.7z", "archive_bytes": 196477554,
+      "source_url": "https://buildbot.libretro.com/stable/1.20.0/windows/x86_64/RetroArch.7z",
+      "sha256": "968b5df7130ce9aabb45b41661e811a77eca983d78c1e1e1d4f5c14fcc58c979",
+      "source_prefix": "RetroArch-Win64/", "expected": ["retroarch.exe"],
+      "license": "GPL-3.0; bundled assets and dependencies have separate notices",
+      "corresponding_source": "https://github.com/libretro/RetroArch/releases/download/v1.20.0/retroarch-sourceonly-1.20.0.tar.xz"
+    },
+    {
+      "id": "cores", "version": "Genesis Plus GX 3c1698778080541927f3d7011a00d2c9efe545af", "platform": "windows-x86_64",
+      "archive": "RetroArch-cores-1.20.0-Windows.7z", "archive_bytes": 223995512,
+      "source_url": "https://buildbot.libretro.com/stable/1.20.0/windows/x86_64/RetroArch_cores.7z",
+      "sha256": "3cfd93f0392feadd47f2d1d3135d196ea2a50126235845209b740df5358a5019",
+      "source_prefix": "RetroArch-Win64/",
+      "select": ["RetroArch-Win64/cores/genesis_plus_gx_libretro.dll"],
+      "expected": ["cores/genesis_plus_gx_libretro.dll"],
+      "license": "Genesis Plus GX custom NON-COMMERCIAL; no sale or commercial activity; copy license and provide source for modified binaries",
+      "corresponding_source": "https://github.com/libretro/Genesis-Plus-GX/tree/3c1698778080541927f3d7011a00d2c9efe545af"
+    },
+    {
+      "id": "pcsx2", "version": "2.8.0", "platform": "windows-x86_64",
+      "archive": "PCSX2-2.8.0-Windows.7z", "archive_bytes": 25664243,
+      "source_url": "https://github.com/PCSX2/pcsx2/releases/download/v2.8.0/pcsx2-v2.8.0-windows-x64-Qt.7z",
+      "sha256": "8a475119fc5950439be64e7b4d0a86b71c25aa39e19346fca7b889c6dbb6d839",
+      "source_prefix": "", "expected": ["pcsx2-qt.exe", "docs/GPL.html", "docs/ThirdPartyLicenses.html"],
+      "license": "GPL-3.0 and bundled third-party notices; no PS2 BIOS included",
+      "corresponding_source": "https://github.com/PCSX2/pcsx2/tree/c10a5c9ad951c517dc48b722b5b84eb9bf7fdb42"
+    },
+    {
+      "id": "xenia", "version": "Canary f03a9fcfcb2f30b3b958d0e5a8e6757cc2cf72fb", "platform": "windows-x86_64",
+      "archive": "Xenia-f03a9fc-Windows.7z", "archive_bytes": 3680825,
+      "source_url": "https://github.com/xenia-canary/xenia-canary/releases/download/f03a9fc/xenia_canary_windows.7z",
+      "sha256": "96cd96982aeaa27834ad14e973e299fd2f7b6bf2deb67e451db6a490b0e43bf3",
+      "source_prefix": "", "expected": ["xenia_canary.exe", "LICENSE"],
+      "license": "BSD-3-Clause; requires an external Microsoft VC++ x64 runtime",
+      "corresponding_source": "https://github.com/xenia-canary/xenia-canary/tree/f03a9fcfcb2f30b3b958d0e5a8e6757cc2cf72fb"
+    }
+  ]
+}

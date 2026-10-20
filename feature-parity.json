@@ -23,6 +23,14 @@
       "flutter": {"path": "flutter_app/lib/controller_settings.dart", "symbol": "class ControllerSettings"},
       "rust_test": {"path": "tests/controller_profiles.rs", "symbol": "fn reset_restores_autoconfig_without_erasing_emulator_settings("},
       "flutter_test": {"path": "flutter_app/test/controller_settings_test.dart", "symbol": "testWidgets("}
+    },
+    {
+      "id": "managed_genesis_launch",
+      "core": {"path": "src/emulator_launcher.rs", "symbol": "pub fn load_managed("},
+      "egui": {"path": "src/main.rs", "symbol": "EmulatorLauncher::load_managed("},
+      "flutter": {"path": "flutter_app/lib/library_view.dart", "symbol": "widget.onLaunch(game.path)"},
+      "rust_test": {"path": "tests/managed_emulators.rs", "symbol": "fn genesis_launch_requires_managed_retroarch_core_without_toml()"},
+      "flutter_test": {"path": "flutter_app/test/widget_test.dart", "symbol": "onLaunch: selections.add"}
     }
   ]
 }

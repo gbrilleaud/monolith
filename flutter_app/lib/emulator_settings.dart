@@ -72,9 +72,8 @@ class _EmulatorSettingsState extends State<EmulatorSettings> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'Un profil est requis par console. Pour Sega Genesis, utilisez system_id = 11. '
-              'Après installation, vérifiez le chemin de l’exécutable et du cœur Mega Drive. '
-              'L’argument {rom} est obligatoire.',
+              'Pour Mega Drive (système 11), Monolith sélectionne automatiquement RetroArch portable et Genesis Plus GX s’ils sont présents dans tools/retroarch. Leur intégrité et le lancement réel restent à vérifier. '
+              'Les autres consoles nécessitent encore un profil avancé. Les installateurs ci-dessous sont anciens et ne préparent pas un moteur géré complet.',
             ),
             const SizedBox(height: 14),
             TextField(
@@ -94,7 +93,7 @@ class _EmulatorSettingsState extends State<EmulatorSettings> {
                   for (final name in ['RetroArch', 'PCSX2', 'Xenia'])
                     OutlinedButton(
                       onPressed: _busy ? null : () => _install(name),
-                      child: Text('Installer $name'),
+                      child: Text('Setup hérité $name'),
                     ),
                 ],
               ),

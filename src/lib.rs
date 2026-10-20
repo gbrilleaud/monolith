@@ -14,6 +14,7 @@ pub mod controller_profiles;
 pub mod cover;
 pub mod db;
 pub mod emulator_launcher;
+pub mod engine_package;
 pub mod flutter_api;
 mod frb_generated; /* AUTO INJECTED BY flutter_rust_bridge. This line may not be accurate, and you can change it according to your needs. */
 pub mod inventory;
@@ -26,5 +27,6 @@ pub mod rom_bundle;
 pub mod session_store;
 pub mod style_config;
 pub mod sync;
+pub mod system_identity;
 pub mod theme;
 pub mod ui;

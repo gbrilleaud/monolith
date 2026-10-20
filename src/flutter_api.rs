@@ -430,6 +430,8 @@ pub fn launch_library_rom(data_directory: String, path: String) -> Result<()> {
     let config = std::env::var_os("MONOLITH_EMULATOR_CONFIG")
         .map(PathBuf::from)
         .unwrap_or_else(|| default_config_path(&root));
-    let launcher = EmulatorLauncher::load(&config)?;
+    let install_root =
+        crate::emulator_launcher::resolve_install_root(&root, &std::env::current_exe()?)?;
+    let launcher = EmulatorLauncher::load_managed(&config, &install_root, &root)?;
     LibraryService::new(db).launch_rom(&launcher, &path)
 }

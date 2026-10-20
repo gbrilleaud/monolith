@@ -3,7 +3,7 @@ use monolith::{
     client_auth::ClientAuth,
     client_config::ClientConfig,
     db::Database,
-    emulator_launcher::{default_config_path, EmulatorLauncher},
+    emulator_launcher::{default_config_path, resolve_install_root, EmulatorLauncher},
     session_store::SessionStore,
     sync::SyncEngine,
     ui::MonolithApp,
@@ -58,8 +58,14 @@ fn main() -> eframe::Result<()> {
     let emulator_config_path = std::env::var_os("MONOLITH_EMULATOR_CONFIG")
         .map(PathBuf::from)
         .unwrap_or_else(|| default_config_path(&data_dir));
-    let emulator_launcher = EmulatorLauncher::load(&emulator_config_path)
-        .unwrap_or_else(|error| panic!("configuration émulateurs impossible : {error}"));
+    let install_root = resolve_install_root(
+        &data_dir,
+        &std::env::current_exe().expect("emplacement Monolith introuvable"),
+    )
+    .expect("répertoire des moteurs invalide");
+    let emulator_launcher =
+        EmulatorLauncher::load_managed(&emulator_config_path, &install_root, &data_dir)
+            .unwrap_or_else(|error| panic!("configuration émulateurs impossible : {error}"));
 
     let client_config_path = data_dir.join("client.toml");
     let backend_url = match std::env::var("MONOLITH_BACKEND_URL") {
