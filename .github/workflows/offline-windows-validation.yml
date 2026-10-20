@@ -12,7 +12,7 @@ jobs:
   offline-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: subosito/flutter-action@v2
         with:
@@ -94,7 +94,7 @@ jobs:
             $hash = (Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant()
             "$hash  $name.zip" | Set-Content "dist/$name.zip.sha256" -NoNewline
           }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-offline-evaluation
           path: |

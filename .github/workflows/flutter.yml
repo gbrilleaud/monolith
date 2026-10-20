@@ -21,7 +21,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             platform: linux
             artifact: monolith-flutter-linux
             output: flutter_app/build/linux/x64/release/bundle
@@ -33,7 +33,7 @@ jobs:
             native_library: flutter_app/build/windows/x64/runner/Release/monolith.dll
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: subosito/flutter-action@v2
         with:
@@ -61,7 +61,7 @@ jobs:
           MONOLITH_FRB_LIB: ${{ github.workspace }}/${{ matrix.native_library }}
         run: flutter test test/frb_integration_test.dart
       - name: Upload unified application bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.output }}

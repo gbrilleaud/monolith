@@ -16,9 +16,9 @@ env:
 jobs:
   quality:
     name: Format, lint and test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check egui/Flutter feature parity contract
         run: |
           PYTHONPATH=. python3 -m unittest discover -s tests -p test_feature_parity.py
@@ -26,7 +26,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -49,7 +49,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             label: Linux x86_64
             artifact_name: monolith-linux-x86_64
             artifact_path: target/release/monolith
@@ -59,9 +59,9 @@ jobs:
             artifact_path: target/release/monolith.exe
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -73,7 +73,7 @@ jobs:
       - name: Build all release binaries
         run: cargo build --locked --release --bins
       - name: Upload testable client binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.artifact_path }}
