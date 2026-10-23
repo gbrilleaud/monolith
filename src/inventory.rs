@@ -1,7 +1,7 @@
 use crate::models::{ScanIssue, ScanObservation, ScanReport, ScanRoot};
 use anyhow::Result;
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeSet, fs, path::Path, time::UNIX_EPOCH};
+use std::{collections::BTreeSet, fs, io::Read, path::Path, time::UNIX_EPOCH};
 
 pub fn scan_root(root: &ScanRoot) -> Result<ScanReport> {
     root.validate()?;
@@ -80,8 +80,8 @@ pub fn scan_root(root: &ScanRoot) -> Result<ScanReport> {
                 continue;
             };
             let canonical_path = path.canonicalize().unwrap_or(path.clone());
-            let bytes = match fs::read(&canonical_path) {
-                Ok(bytes) => bytes,
+            let file = match fs::File::open(&canonical_path) {
+                Ok(file) => file,
                 Err(error) => {
                     report.issues.push(ScanIssue {
                         path: canonical_path.display().to_string(),
@@ -90,7 +90,23 @@ pub fn scan_root(root: &ScanRoot) -> Result<ScanReport> {
                     continue;
                 }
             };
-            let sha256 = format!("{:x}", Sha256::digest(&bytes));
+            let mut file = file;
+            let mut hasher = Sha256::new();
+            let mut buffer = [0_u8; 1024 * 1024];
+            let sha256 = loop {
+                match file.read(&mut buffer) {
+                    Ok(0) => break Some(format!("{:x}", hasher.finalize())),
+                    Ok(count) => hasher.update(&buffer[..count]),
+                    Err(error) => {
+                        report.issues.push(ScanIssue {
+                            path: canonical_path.display().to_string(),
+                            message: format!("lecture ROM impossible : {error}"),
+                        });
+                        break None;
+                    }
+                }
+            };
+            let Some(sha256) = sha256 else { continue };
             report.observations.push(ScanObservation {
                 system_id: root.system_id,
                 path: canonical_path.display().to_string(),

@@ -6,6 +6,30 @@ use monolith::{
 use std::fs;
 
 #[test]
+fn scanner_hashes_a_file_across_buffer_boundaries() {
+    use sha2::{Digest, Sha256};
+
+    let directory = tempfile::tempdir().unwrap();
+    let bytes = vec![0x5a; 2 * 1024 * 1024 + 17];
+    fs::write(directory.path().join("large.iso"), &bytes).unwrap();
+
+    let report = scan_root(&ScanRoot {
+        system_id: 42,
+        path: directory.path().display().to_string(),
+        extensions: vec!["iso".into()],
+    })
+    .unwrap();
+
+    assert!(report.issues.is_empty());
+    assert_eq!(report.accepted, 1);
+    let expected = format!("{:x}", Sha256::digest(&bytes));
+    assert_eq!(
+        report.observations[0].sha256.as_deref(),
+        Some(expected.as_str())
+    );
+}
+
+#[test]
 fn rom_location_serializes_availability_as_snake_case() {
     let location = RomLocation {
         id: Some(7),
